@@ -1647,23 +1647,6 @@ QPair<QString, QString> Utilities::getFilenameBasenameAndSuffix(const QString& f
 
 void Utilities::upgradeClicked()
 {
-    QUrl url;
-    int accountType = Preferences::instance()->accountType();
-    if(accountType == Preferences::ACCOUNT_TYPE_STARTER
-        || accountType == Preferences::ACCOUNT_TYPE_BASIC
-        || accountType == Preferences::ACCOUNT_TYPE_ESSENTIAL)
-    {
-        url = ServiceUrls::instance()->getSmallProUrl();
-    }
-    else
-    {
-        url = ServiceUrls::instance()->getProUrl();
-    }
-    openUrl(url);
-
-    MegaSyncApp->getStatsEventHandler()->sendTrackedEvent(
-        AppStatsEvents::EventType::UPGRADE_ACCOUNT_CLICKED,
-        true);
 }
 
 QString Utilities::getNodePath(MegaTransfer* transfer)
@@ -2249,23 +2232,7 @@ bool Utilities::isNodeNameValid(const QString& name)
 
 bool Utilities::shouldDisplayUpgradeButton(const bool isTransferOverquota)
 {
-    auto preferences = Preferences::instance();
-    const int storageState = preferences->getStorageState();
-    if (preferences->accountType() == Preferences::ACCOUNT_TYPE_FREE)
-    {
-        return true;
-    }
-    else if (storageState == MegaApi::STORAGE_STATE_PAYWALL ||
-             storageState == MegaApi::STORAGE_STATE_RED ||
-             storageState == MegaApi::STORAGE_STATE_ORANGE)
-    {
-        return true;
-    }
-    else if (isTransferOverquota)
-    {
-        return true;
-    }
-
+    Q_UNUSED(isTransferOverquota);
     return false;
 }
 

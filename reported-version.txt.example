@@ -1,0 +1,11 @@
+# MEGAsync reported version (no rebuild).
+# Formula: major*10000 + minor*100 + micro
+#   6.6.1 → 60601
+#   6.7.2 → 60702
+#
+# Copy this file next to MEGAsyncX.exe  (wins)
+# or to:  %LOCALAPPDATA%\Mega Limited\MEGAsyncX\reported-version.txt
+# Restart the app after edit.
+#
+# Put the GitHub tag from https://github.com/meganz/MEGAsync/releases
+6.6.1

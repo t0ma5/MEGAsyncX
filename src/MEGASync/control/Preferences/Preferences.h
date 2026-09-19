@@ -12,6 +12,7 @@
 #include <QStringList>
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <type_traits>
 
@@ -380,6 +381,15 @@ public:
     void unlink();
     void resetGlobalSettings();//Clear and remove any global setting. Not account specific ones.
 
+    static constexpr int MAX_SAVED_ACCOUNTS = 5;
+    QStringList savedAccountEmails();
+    void rememberSavedAccount(const QString& email);
+    void forgetSavedAccount(const QString& email);
+    bool hasSessionForAccount(const QString& email);
+    QString sessionForAccount(const QString& email);
+    void prepareSwitchToAccount(const QString& email);
+    void prepareAddAccount();
+
     bool isCrashed();
     void setCrashed(bool value);
     QString crashedUserID();
@@ -591,6 +601,12 @@ public:
     static const int VERSION_RC;
     static const int BUILD_ID;
     static const QString VERSION_STRING;
+
+    // Optional reported-version.txt (exe dir first, then data dir). Line like 6.7.2 → code 60702.
+    static void loadReportedVersion(const QString& dataPath, const QString& exeDir);
+    static int reportedVersionCode();
+    static QString reportedVersionString();
+    static QString reportedUserAgent();
     static QString SDK_ID;
     static const QString CHANGELOG;
     static const QString TRANSLATION_FOLDER;
@@ -672,6 +688,8 @@ protected:
     std::chrono::system_clock::time_point storageOverQuotaSyncsDialogDisabledUntil;
 
     static const QString currentAccountKey;
+    static const QString savedAccountsKey;
+    static const QString pendingGuestLoginKey;
     static const QString currentAccountStatusKey;
     static const QString needsFetchNodesKey;
     static const QString syncsGroupByTagKey;
@@ -872,6 +890,7 @@ protected:
 
 private:
     void updateFullName();
+    void runAtSettingsRoot(const std::function<void()>& fn);
 
 private slots:
     void setFullName(const QString& newFirstName, const QString& newLastName);

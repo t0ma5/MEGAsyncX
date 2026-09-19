@@ -18,12 +18,12 @@
 #endif
 
 #define VER_COMPANYNAME_STR         "Mega Limited\0"
-#define VER_FILEDESCRIPTION_STR     "MEGAsync\0"
-#define VER_INTERNALNAME_STR        "MEGAsync.exe\0"
+#define VER_FILEDESCRIPTION_STR     "MEGAsyncX\0"
+#define VER_INTERNALNAME_STR        "MEGAsyncX.exe\0"
 #define VER_LEGALCOPYRIGHT_STR "Mega Limited 2026\0"
 #define VER_LEGALTRADEMARKS1_STR    "All Rights Reserved"
-#define VER_ORIGINALFILENAME_STR    "MEGAsync.exe\0"
-#define VER_PRODUCTNAME_STR         "MEGAsync\0"
+#define VER_ORIGINALFILENAME_STR    "MEGAsyncX.exe\0"
+#define VER_PRODUCTNAME_STR         "MEGAsyncX\0"
 
 /* SDK commit hash, 7 chars */
 #define VER_SDK_ID "8775533" // v10.19.0

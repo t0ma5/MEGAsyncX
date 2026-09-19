@@ -1,6 +1,7 @@
 #include "SettingsDialog.h"
 
 #include "AccountDetailsManager.h"
+#include "AccountSwitcherWidget.h"
 #include "BugReportDialog.h"
 #include "ChangePasswordComponent.h"
 #include "CommonMessages.h"
@@ -93,6 +94,7 @@ SettingsDialog::SettingsDialog(MegaApplication* app, bool proxyOnly, QWidget* pa
 {
     mUi->setupUi(this);
     mUi->lEmail->installEventFilter(this);
+    mUi->pAccountLayout->insertWidget(0, new AccountSwitcherWidget(mApp, mUi->pAccount));
 
     mAccountStateQuickWidget = mUi->accountStateQuickWidget;
     connect(mAccountStateQuickWidget,
@@ -136,10 +138,9 @@ SettingsDialog::SettingsDialog(MegaApplication* app, bool proxyOnly, QWidget* pa
 #endif
 
     mUi->wDesktopIntegrationContainer->hide();
-
-#ifdef Q_OS_WINDOWS
-    mUi->wDesktopIntegrationContainer->show();
-#endif
+    mUi->bUpdate->hide();
+    mUi->wAutoUpdateContainer->hide();
+    mUi->bUpgrade->hide();
 
 #ifdef Q_OS_MACOS
     this->setWindowTitle(tr("Settings"));
@@ -992,14 +993,14 @@ void SettingsDialog::updateBandwidthElements()
 void SettingsDialog::updateAccountElements()
 {
     mUi->lAccountType->setText(Utilities::getReadablePlanFromId(mPreferences->accountType()));
-    mUi->bUpgrade->show();
+    mUi->bUpgrade->hide();
     mAccountStateQuickWidget->setShowStorageCard(true);
     mAccountStateQuickWidget->setShowTransferCard(true);
 
     switch (mPreferences->accountType())
     {
         case Preferences::ACCOUNT_TYPE_FREE:
-            mUi->bUpgrade->show();
+            mUi->bUpgrade->hide();
             mAccountStateQuickWidget->setShowTransferCard(false);
             break;
         case Preferences::ACCOUNT_TYPE_PROI:

@@ -186,71 +186,9 @@ void CrashHandler::tryReboot()
 
 void CrashHandler::sendPendingCrashReports(QString userMessage, bool shouldSendLogs)
 {
-    QStringList crashes = getPendingCrashReports();
-    if (!crashes.size())
-    {
-        return;
-    }
-    std::string url = CRASH_BACKEND_URL;
-    std::map<std::string, std::string> parameters;
-
-    parameters["sentry[release]"] = string{VER_FILEDESCRIPTION_STR} + "@" + VER_PRODUCTVERSION_STR;
-    parameters["sentry[environment]"] = "production";
-    parameters["sentry[logger]"] = "breakpad";
-    parameters["sentry[level]"] = "fatal";
-    parameters["sentry[platform]"] = "native";
-    std::string deviceID = dynamic_cast<MegaApplication*>(qApp)->getMegaApi()->getDeviceId();
-    parameters["sentry[user][id]"] = deviceID.empty() ?
-                                         "invalid_user" :
-                                         deviceID; // Used to properly increase affected users count
-                                                   // for each installation (device ID is used).
-    // Sentry Context section (these are not searchable)
-    parameters["sentry[contexts][app][app_name]"] =
-        QCoreApplication::applicationName().toStdString();
-    parameters["sentry[contexts][app][logs_uploaded]"] = shouldSendLogs ? "Yes" : "No";
-    parameters["sentry[contexts][app][build_type]"] =
-#ifdef QT_DEBUG
-        "debug";
-#else
-        "release";
-#endif
-    if (!userMessage.isEmpty())
-    {
-        parameters["sentry[contexts][user][feedback]"] = userMessage.toStdString();
-    }
-    // Sentry standard tags
-    parameters["sentry[tags][os]"] = QSysInfo::prettyProductName().toStdString();
-    parameters["sentry[contexts][os][kernel_version]"] = QSysInfo::kernelVersion().toStdString();
-
-    // Custom tags (Use tags for indexing and searching the info in sentry)
-    parameters["sentry[tags][build_id]"] = std::to_string(VER_BUILD_ID);
-    parameters["sentry[tags][mega_sdk]"] = Preferences::SDK_ID.toStdString();
-    parameters["sentry[tags][auto_update]"] =
-        Preferences::instance()->updateAutomatically() ? "True" : "False";
-    std::string UID = Preferences::instance()->crashedUserID().toStdString();
-    parameters["sentry[tags][user-handle]"] = UID.empty() ? "invalid_user" : UID;
-
-    QThreadPool::globalInstance()->start(
-        [=]()
-        {
-            QString combinedCrashID;
-            for (auto crash: crashes)
-            {
-                std::map<std::string, std::string> files;
-                files["upload_file_minidump"] = crash.toStdString();
-                auto crashID = sendCrashReport(url, parameters, files);
-                if (!crashID.isEmpty())
-                {
-                    combinedCrashID += (crashID + QString::fromUtf8("-"));
-                }
-            }
-            deletePendingCrashReports(crashes);
-            if (shouldSendLogs && !combinedCrashID.isEmpty())
-            {
-                sendLogs(combinedCrashID);
-            }
-            sendOSNotification(!combinedCrashID.isEmpty());
-        });
+    Q_UNUSED(userMessage);
+    Q_UNUSED(shouldSendLogs);
+    deletePendingCrashReports(getPendingCrashReports());
 }
 
 QStringList CrashHandler::getPendingCrashReports()

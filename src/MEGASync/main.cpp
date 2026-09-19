@@ -324,7 +324,7 @@ int main(int argc, char *argv[])
 {
     QCoreApplication::setOrganizationName(QString::fromUtf8("Mega Limited"));
     QCoreApplication::setOrganizationDomain(QString::fromUtf8("mega.co.nz"));
-    QCoreApplication::setApplicationName(QString::fromUtf8("MEGAsync")); //Do not change app name, keep MEGAsync because Linux rely on that for app paths.
+    QCoreApplication::setApplicationName(QString::fromUtf8("MEGAsyncX"));
     QCoreApplication::setApplicationVersion(QString::number(Preferences::VERSION_CODE));
 
     Platform::create();

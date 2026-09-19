@@ -1,5 +1,6 @@
 set(DESKTOP_APP_GUI_HEADERS
     ${CMAKE_CURRENT_LIST_DIR}/SettingsDialog.h
+    ${CMAKE_CURRENT_LIST_DIR}/AccountSwitcherWidget.h
     ${CMAKE_CURRENT_LIST_DIR}/AutoResizeStackedWidget.h
     ${CMAKE_CURRENT_LIST_DIR}/BalloonToolTip.h
     ${CMAKE_CURRENT_LIST_DIR}/BlurredShadowEffect.h
@@ -143,6 +144,7 @@ set(DESKTOP_APP_GUI_HEADERS
 
 set(DESKTOP_APP_GUI_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/SettingsDialog.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/AccountSwitcherWidget.cpp
     ${CMAKE_CURRENT_LIST_DIR}/BalloonToolTip.cpp
     ${CMAKE_CURRENT_LIST_DIR}/BlurredShadowEffect.cpp
     ${CMAKE_CURRENT_LIST_DIR}/ButtonIconManager.cpp

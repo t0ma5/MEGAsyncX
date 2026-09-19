@@ -4,6 +4,7 @@
 
 if (WIN32)
     add_executable(MEGAsync WIN32)
+    set_target_properties(MEGAsync PROPERTIES OUTPUT_NAME "MEGAsyncX")
 elseif (APPLE)
     add_executable(MEGAsync MACOSX_BUNDLE)
 else()

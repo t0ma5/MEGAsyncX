@@ -1,5 +1,6 @@
 #include "LoginController.h"
 
+#include "AccountSwitcher.h"
 #include "ConnectivityChecker.h"
 #include "FatalEventHandler.h"
 #include "MegaApplication.h"
@@ -788,6 +789,10 @@ void LoginController::dumpSession()
     if (session)
     {
         mPreferences->setSession(QString::fromUtf8(session.get()));
+        if (mPreferences->logged())
+        {
+            mPreferences->rememberSavedAccount(mPreferences->email());
+        }
     }
 }
 
@@ -803,6 +808,12 @@ void LoginController::setEmail(const QString& email)
         mEmail = email;
         emit emailChanged();
     }
+}
+
+void LoginController::prefillEmail(const QString& email)
+{
+    setEmail(email);
+    setState(LOGGED_OUT);
 }
 
 void LoginController::runConnectivityCheck()
@@ -955,24 +966,28 @@ void FastLoginController::onLogin(mega::MegaRequest* request, mega::MegaError* e
             MegaSyncApp->onLoginFinished();
             if (!mPreferences->getSession().isEmpty())
             {
-                //Successful login, fetch nodes
                 fetchNodes();
                 return;
             }
+            AccountSwitcher::handleDeadSession(MegaSyncApp, mPreferences->email());
+            MegaSyncApp->onGlobalSyncStateChanged(mMegaApi);
+            return;
         }
-        else if (errorCode != mega::MegaError::API_ESID && errorCode != mega::MegaError::API_ESSL)
-        //Invalid session or public key, already managed in TYPE_LOGOUT
+
+        const QString deadEmail = mPreferences->email();
+        if (errorCode == mega::MegaError::API_ESID || errorCode == mega::MegaError::API_ESSL)
         {
-            MessageDialogInfo msgInfo;
-            msgInfo.descriptionText =
-                tr("Login error: %1")
-                    .arg(QCoreApplication::translate("MegaError", e->getErrorString()));
-
-            MessageDialogOpener::warning(msgInfo);
+            // TYPE_LOGOUT path in LogoutController keeps other saved accounts.
+            MegaSyncApp->onGlobalSyncStateChanged(mMegaApi);
+            return;
         }
 
-        //Wrong login -> logout
-        MegaSyncApp->unlink(true);
+        MessageDialogInfo msgInfo;
+        msgInfo.descriptionText =
+            tr("Login error: %1")
+                .arg(QCoreApplication::translate("MegaError", e->getErrorString()));
+        MessageDialogOpener::warning(msgInfo);
+        AccountSwitcher::handleDeadSession(MegaSyncApp, deadEmail);
     }
     MegaSyncApp->onGlobalSyncStateChanged(mMegaApi);
 }
@@ -1032,11 +1047,16 @@ void LogoutController::onRequestFinish(mega::MegaRequest* request, mega::MegaErr
 
         if (paramType == mega::MegaError::API_ESID)
         {
+            const QString deadEmail = Preferences::instance()->logged()
+                                          ? Preferences::instance()->email()
+                                          : QString();
             MessageDialogInfo msgInfo;
             msgInfo.descriptionText =
-                tr("You have been logged out on this computer from another location");
-
+                tr("You have been logged out on this computer from another location. "
+                   "Sign in again to %1. Other saved accounts are kept.")
+                    .arg(deadEmail);
             MessageDialogOpener::information(msgInfo);
+            AccountSwitcher::handleDeadSession(MegaSyncApp, deadEmail);
         }
         else if (paramType == mega::MegaError::API_ESSL)
         {
@@ -1078,7 +1098,14 @@ void LogoutController::onRequestFinish(mega::MegaRequest* request, mega::MegaErr
 
             MessageDialogOpener::information(msgInfo);
         }
-        MegaSyncApp->unlink();
+
+        if (paramType != mega::MegaError::API_ESID)
+        {
+            const QString deadEmail = Preferences::instance()->logged()
+                                          ? Preferences::instance()->email()
+                                          : QString();
+            AccountSwitcher::handleDeadSession(MegaSyncApp, deadEmail);
+        }
     }
 
     // Check for any sync disabled by logout to warn user on next login with user&password

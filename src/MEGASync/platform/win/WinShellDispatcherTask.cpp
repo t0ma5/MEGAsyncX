@@ -64,7 +64,7 @@ int WinShellDispatcherTask::dispatchPipe()
 {
     DWORD i, dwWait, cbRet, dwErr;
     BOOL fSuccess;
-    PCWSTR lpszPipename = TEXT("\\\\.\\pipe\\MEGAprivacyMEGAsync");
+    PCWSTR lpszPipename = TEXT("\\\\.\\pipe\\MEGAprivacyMEGAsyncX");
 
     // The initial loop creates several instances of a named pipe
     // along with an event object for each instance.  An

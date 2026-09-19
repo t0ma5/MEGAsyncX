@@ -128,7 +128,7 @@ public:
     mega::MegaApi *getMegaApiFolders() { return megaApiFolders; }
     std::unique_ptr<mega::MegaApiLock> megaApiLock;
 
-    QString getMEGAString(){return QLatin1String("MEGA");}
+    QString getMEGAString(){return QLatin1String("MEGAsyncX");}
 
     void cleanLocalCaches(bool all = false);
     void showInfoMessage(QString message, QString title = MegaSyncApp->getMEGAString());
@@ -255,6 +255,9 @@ public slots:
     void importFromCloudActionClicked();
     void transferManagerActionClicked(int tab = 0);
     void logoutActionClicked();
+    void switchAccount(const QString& email);
+    void addSavedAccount();
+    void forgetSavedAccount(const QString& email);
     void processDownloads();
     void processSetDownload(const QString& publicLink, const QList<mega::MegaHandle>& elementHandleList);
     void processUploads();
@@ -344,6 +347,7 @@ protected slots:
 protected:
     void createTrayIcon();
     void createGuestMenu();
+    void populateAccountsMenu(QMenu* menu);
     bool showTrayIconAlwaysNEW();
     void applyStorageState(int state, bool doNotAskForUserStats = false);
     void processUploadQueue(mega::MegaHandle nodeHandle, QWidget* caller = nullptr);

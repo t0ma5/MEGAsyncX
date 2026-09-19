@@ -1,0 +1,98 @@
+# Build MEGAsyncX on GitHub-hosted Windows. First run is slow (vcpkg).
+name: Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 360
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+      CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      QT_VERSION: "5.15.2"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Export GitHub Actions cache for vcpkg
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Qt 5.15.2 MSVC 2019 64-bit
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+          archives: qtbase qtdeclarative qtquickcontrols qtquickcontrols2 qtsvg qttools qtgraphicaleffects qtimageformats qtwinextras qttranslations
+
+      - name: Clone vcpkg at manifest baseline
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "${{ env.VCPKG_ROOT }}"
+          git -C "${{ env.VCPKG_ROOT }}" checkout ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0
+          & "${{ env.VCPKG_ROOT }}\bootstrap-vcpkg.bat" -disableMetrics
+
+      - name: Configure CMake
+        run: |
+          cmake -G "Visual Studio 17 2022" -A x64 -T v143 `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DVCPKG_ROOT="$env:VCPKG_ROOT" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-mega `
+            -DENABLE_EXPLORER_EXT=OFF `
+            -DENABLE_DESKTOP_UPDATER=OFF `
+            -DENABLE_DESKTOP_UPDATE_GEN=OFF `
+            -DENABLE_DESKTOP_APP_TESTS=OFF `
+            -DENABLE_DESIGN_TOKENS_IMPORTER=OFF `
+            -S "${{ github.workspace }}" `
+            -B "${{ github.workspace }}/build-x64"
+
+      - name: Build MEGAsync
+        run: |
+          cmake --build "${{ github.workspace }}/build-x64" --config RelWithDebInfo --target MEGAsync -j 4
+
+      - name: Deploy Qt next to exe
+        shell: pwsh
+        run: |
+          $out = Join-Path "${{ github.workspace }}" "build-x64\src\MEGASync\RelWithDebInfo"
+          $exe = Join-Path $out "MEGAsyncX.exe"
+          if (-not (Test-Path $exe)) { throw "Missing $exe" }
+          $deploy = Join-Path $env:QT_ROOT_DIR "bin\windeployqt.exe"
+          & $deploy --release --compiler-runtime --qmldir "${{ github.workspace }}\src\MEGASync" $exe
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+
+      - name: Upload MEGAsyncX
+        uses: actions/upload-artifact@v4
+        with:
+          name: MEGAsyncX-windows-x64
+          path: ${{ github.workspace }}/build-x64/src/MEGASync/RelWithDebInfo
+          if-no-files-found: error
+          retention-days: 14

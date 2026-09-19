@@ -8,6 +8,8 @@
 #include <QCryptographicHash>
 #include <QDesktopServices>
 #include <QDir>
+#include <QFile>
+#include <QTextStream>
 
 #include <cassert>
 
@@ -42,6 +44,79 @@ const char* settingsStatusToString(QSettings::Status status)
 
     return "UnknownError";
 }
+
+int gReportedMajor = VER_MAJOR;
+int gReportedMinor = VER_MINOR;
+int gReportedMicro = VER_MICRO;
+int gReportedRc = VER_RC;
+bool gReportedVersionLoaded = false;
+
+bool parseReportedVersionLine(const QString& line, int& major, int& minor, int& micro, int& rc)
+{
+    QString text = line.trimmed();
+    if (text.isEmpty() || text.startsWith(QLatin1Char('#')))
+    {
+        return false;
+    }
+    text = text.split(QLatin1Char(' '), Qt::SkipEmptyParts).value(0);
+    const QStringList parts = text.split(QLatin1Char('.'));
+    if (parts.size() < 3 || parts.size() > 4)
+    {
+        return false;
+    }
+    bool ok = false;
+    major = parts.at(0).toInt(&ok);
+    if (!ok || major < 0)
+    {
+        return false;
+    }
+    minor = parts.at(1).toInt(&ok);
+    if (!ok || minor < 0 || minor > 99)
+    {
+        return false;
+    }
+    micro = parts.at(2).toInt(&ok);
+    if (!ok || micro < 0 || micro > 99)
+    {
+        return false;
+    }
+    rc = 0;
+    if (parts.size() == 4)
+    {
+        rc = parts.at(3).toInt(&ok);
+        if (!ok || rc < 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool loadReportedVersionFile(const QString& path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        return false;
+    }
+    QTextStream stream(&file);
+    while (!stream.atEnd())
+    {
+        int major = 0;
+        int minor = 0;
+        int micro = 0;
+        int rc = 0;
+        if (parseReportedVersionLine(stream.readLine(), major, minor, micro, rc))
+        {
+            gReportedMajor = major;
+            gReportedMinor = minor;
+            gReportedMicro = micro;
+            gReportedRc = rc;
+            return true;
+        }
+    }
+    return false;
+}
 }
 
 using namespace mega;
@@ -60,6 +135,48 @@ const QString Preferences::VERSION_STRING =
     QString::fromLatin1("%1.%2.%3").arg(VER_MAJOR).arg(VER_MINOR).arg(VER_MICRO);
 QString Preferences::SDK_ID = QString::fromUtf8(VER_SDK_ID);
 const QString Preferences::CHANGELOG = QString::fromUtf8(VER_CHANGES_NOTES);
+
+void Preferences::loadReportedVersion(const QString& dataPath, const QString& exeDir)
+{
+    if (gReportedVersionLoaded)
+    {
+        return;
+    }
+    gReportedVersionLoaded = true;
+
+    const QString fileName = QString::fromLatin1("reported-version.txt");
+    if (!exeDir.isEmpty() &&
+        loadReportedVersionFile(QDir(exeDir).filePath(fileName)))
+    {
+        return;
+    }
+    if (!dataPath.isEmpty())
+    {
+        loadReportedVersionFile(QDir(dataPath).filePath(fileName));
+    }
+}
+
+int Preferences::reportedVersionCode()
+{
+    return gReportedMajor * 10000 + gReportedMinor * 100 + gReportedMicro;
+}
+
+QString Preferences::reportedVersionString()
+{
+    return QString::fromLatin1("%1.%2.%3")
+        .arg(gReportedMajor)
+        .arg(gReportedMinor)
+        .arg(gReportedMicro);
+}
+
+QString Preferences::reportedUserAgent()
+{
+    return QString::fromUtf8("MEGAsync/%1.%2.%3.%4")
+        .arg(gReportedMajor)
+        .arg(gReportedMinor)
+        .arg(gReportedMicro)
+        .arg(gReportedRc);
+}
 
 const QString Preferences::TRANSLATION_FOLDER = QString::fromLatin1("://translations/");
 const QString Preferences::TRANSLATION_PREFIX = QString::fromLatin1("MEGASyncStrings_");
@@ -135,6 +252,8 @@ const QString Preferences::OBSOLETE_BACKUP_FOLDER_NAME = QString::fromLatin1("ob
 const QString Preferences::PROXY_TEST_SUBSTRING = QString::fromUtf8("-2");
 const QString Preferences::syncsGroupByTagKey       = QString::fromLatin1("SyncsByTag");
 const QString Preferences::currentAccountKey        = QString::fromLatin1("currentAccount");
+const QString Preferences::savedAccountsKey         = QString::fromLatin1("savedAccounts");
+const QString Preferences::pendingGuestLoginKey     = QString::fromLatin1("pendingGuestLogin");
 const QString Preferences::currentAccountStatusKey  = QString::fromLatin1("currentAccountStatus");
 const QString Preferences::needsFetchNodesKey       = QString::fromLatin1("needsFetchNodes");
 const QString Preferences::emailKey                 = QString::fromLatin1("email");
@@ -314,7 +433,7 @@ const QString Preferences::awakeIfActiveKey = QString::fromLatin1("sleepIfInacti
 const bool Preferences::defaultAwakeIfActive = false;
 
 const bool Preferences::defaultStartOnStartup = true;
-const bool Preferences::defaultUpdateAutomatically = true;
+const bool Preferences::defaultUpdateAutomatically = false;
 const bool Preferences::defaultCleanerDaysLimit     = true;
 
 const bool Preferences::defaultSSLcertificateException = false;
@@ -380,12 +499,22 @@ void Preferences::initialize(QString dataPath)
     errorFlag = false;
     mSettings.reset(new EncryptedSettings(settingsFile));
 
+    const bool pendingGuest = mSettings->value(pendingGuestLoginKey, false).toBool();
+    if (pendingGuest)
+    {
+        mSettings->setValue(pendingGuestLoginKey, false);
+        mSettings->sync();
+        recoverDeprecatedNotificationsSettings();
+        return;
+    }
+
     QString currentAccount = mSettings->value(currentAccountKey).toString();
     if (currentAccount.size())
     {
         if (hasEmail(currentAccount))
         {
             login(currentAccount);
+            rememberSavedAccount(currentAccount);
         }
         else
         {
@@ -418,6 +547,7 @@ void Preferences::initialize(QString dataPath)
                 if (hasEmail(currentAccount))
                 {
                     login(currentAccount);
+                    rememberSavedAccount(currentAccount);
                     errorFlag = false;
                 }
                 else
@@ -2574,10 +2704,7 @@ void Preferences::disableFileVersioning(bool value)
 
 bool Preferences::overlayIconsDisabled()
 {
-    mutex.lock();
-    bool result = getValue(disableOverlayIconsKey, false);
-    mutex.unlock();
-    return result;
+    return true;
 }
 
 void Preferences::disableOverlayIcons(bool value)
@@ -2600,9 +2727,7 @@ void Preferences::disableLeftPaneIcons(bool value)
 
 bool Preferences::contextMenuDisabled()
 {
-    QMutexLocker locker(&mutex);
-    bool result = getValue(disableContextMenuKey, false);
-    return result;
+    return true;
 }
 
 void Preferences::disableContextMenu(bool value)
@@ -2762,6 +2887,7 @@ void Preferences::setEmailAndGeneralSettings(const QString &email)
     this->setProxyRequiresAuth(proxyAuth);
     this->setProxyUsername(proxyUsername);
     this->setProxyPassword(proxyPassword);
+    rememberSavedAccount(email);
 }
 
 void Preferences::monitorUserAttributes()
@@ -3042,4 +3168,156 @@ void Preferences::setFullName(const QString& newFirstName, const QString& newLas
     {
         setLastName(newLastName);
     }
+}
+
+void Preferences::runAtSettingsRoot(const std::function<void()>& fn)
+{
+    QString currentAccount;
+    const bool inGroup = !mSettings->isGroupEmpty();
+    if (inGroup)
+    {
+        mSettings->endGroup();
+        currentAccount = mSettings->value(currentAccountKey).toString();
+    }
+    fn();
+    if (inGroup && !currentAccount.isEmpty())
+    {
+        mSettings->beginGroup(currentAccount);
+    }
+}
+
+QStringList Preferences::savedAccountEmails()
+{
+    QMutexLocker locker(&mutex);
+    QStringList stored;
+    QString current;
+    runAtSettingsRoot([&]() {
+        stored = mSettings->value(savedAccountsKey).toStringList();
+        current = mSettings->value(currentAccountKey).toString();
+    });
+    if (!current.isEmpty())
+    {
+        bool haveCurrent = false;
+        for (const QString& storedEmail: stored)
+        {
+            if (QString::compare(storedEmail, current, Qt::CaseInsensitive) == 0)
+            {
+                haveCurrent = true;
+                break;
+            }
+        }
+        if (!haveCurrent)
+        {
+            stored.prepend(current);
+        }
+    }
+    stored.removeDuplicates();
+    while (stored.size() > MAX_SAVED_ACCOUNTS)
+    {
+        stored.removeLast();
+    }
+    return stored;
+}
+
+void Preferences::rememberSavedAccount(const QString& email)
+{
+    if (email.isEmpty())
+    {
+        return;
+    }
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        QStringList stored = mSettings->value(savedAccountsKey).toStringList();
+        bool already = false;
+        for (const QString& storedEmail: stored)
+        {
+            if (QString::compare(storedEmail, email, Qt::CaseInsensitive) == 0)
+            {
+                already = true;
+                break;
+            }
+        }
+        if (!already)
+        {
+            stored.append(email);
+        }
+        while (stored.size() > MAX_SAVED_ACCOUNTS)
+        {
+            stored.removeLast();
+        }
+        mSettings->setValue(savedAccountsKey, stored);
+        mSettings->sync();
+    });
+}
+
+void Preferences::forgetSavedAccount(const QString& email)
+{
+    if (email.isEmpty())
+    {
+        return;
+    }
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        QStringList stored = mSettings->value(savedAccountsKey).toStringList();
+        stored.removeAll(email);
+        mSettings->setValue(savedAccountsKey, stored);
+        if (mSettings->containsGroup(email))
+        {
+            mSettings->beginGroup(email);
+            mSettings->remove(sessionKey);
+            mSettings->endGroup();
+        }
+        mSettings->sync();
+    });
+}
+
+bool Preferences::hasSessionForAccount(const QString& email)
+{
+    return !sessionForAccount(email).isEmpty();
+}
+
+QString Preferences::sessionForAccount(const QString& email)
+{
+    if (email.isEmpty())
+    {
+        return QString();
+    }
+    QMutexLocker locker(&mutex);
+    QString session;
+    runAtSettingsRoot([&]() {
+        if (mSettings->containsGroup(email))
+        {
+            mSettings->beginGroup(email);
+            session = mSettings->value(sessionKey).toString();
+            mSettings->endGroup();
+        }
+    });
+    return session;
+}
+
+void Preferences::prepareSwitchToAccount(const QString& email)
+{
+    QMutexLocker locker(&mutex);
+    QString session;
+    runAtSettingsRoot([&]() {
+        if (mSettings->containsGroup(email))
+        {
+            mSettings->beginGroup(email);
+            session = mSettings->value(sessionKey).toString();
+            mSettings->endGroup();
+        }
+        mSettings->setValue(currentAccountKey, email);
+        mSettings->setValue(sessionKey, session);
+        mSettings->setValue(pendingGuestLoginKey, false);
+        mSettings->sync();
+    });
+}
+
+void Preferences::prepareAddAccount()
+{
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        mSettings->setValue(pendingGuestLoginKey, true);
+        mSettings->sync();
+    });
 }

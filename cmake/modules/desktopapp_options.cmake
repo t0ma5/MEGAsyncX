@@ -3,8 +3,8 @@
 #
 
 if(WIN32)
-    option(ENABLE_EXPLORER_EXT "desc" ON)
-    option(ENABLE_DESKTOP_UPDATER "Enable desktop updater tool build" ON)
+    option(ENABLE_EXPLORER_EXT "desc" OFF)
+    option(ENABLE_DESKTOP_UPDATER "Enable desktop updater tool build" OFF)
 elseif(APPLE)
     option(ENABLE_FINDER_EXT "desc" ON)
     option(ENABLE_DESKTOP_UPDATER "Enable desktop updater tool build" ON)
@@ -16,7 +16,7 @@ else()
 endif()
 
 option(ENABLE_DESKTOP_APP "Enable desktop app build" ON)
-option(ENABLE_DESKTOP_UPDATE_GEN "Enable desktop update generator tool" ON)
+option(ENABLE_DESKTOP_UPDATE_GEN "Enable desktop update generator tool" OFF)
 
 option(ENABLE_DESKTOP_APP_WERROR "Enable warnings as errors" ON)
 option(ENABLE_DESIGN_TOKENS_IMPORTER "Enable design tokens importer tool" OFF)

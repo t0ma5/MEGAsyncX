@@ -53,26 +53,10 @@ void ProxyStatsEventHandler::send(AppStatsEvents::EventType type,
                                   bool addJourneyId,
                                   const char* viewId)
 {
-    if(!mMegaApi || !canSend())
-    {
-        return;
-    }
-
-    int eventType = AppStatsEvents::getEventType(type);
-    if(eventType == -1)
-    {
-        mMegaApi->log(mega::MegaApi::LOG_LEVEL_WARNING,
-                      "Trying to send an event with not valid type");
-    }
-    else if(message.isEmpty())
-    {
-        mMegaApi->log(mega::MegaApi::LOG_LEVEL_WARNING,
-                      "Trying to send an event with not valid message");
-    }
-    else
-    {
-        mMegaApi->sendEvent(eventType, message.toUtf8().constData(), addJourneyId, viewId);
-    }
+    Q_UNUSED(type);
+    Q_UNUSED(message);
+    Q_UNUSED(addJourneyId);
+    Q_UNUSED(viewId);
 }
 
 bool ProxyStatsEventHandler::canSend() const

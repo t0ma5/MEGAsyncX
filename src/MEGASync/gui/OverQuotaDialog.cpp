@@ -13,6 +13,7 @@ OverQuotaDialog::OverQuotaDialog(OverQuotaDialogType type, QWidget *parent) :
 {
     ui->setupUi(this);
     ui->labelTitle->setWordWrap(false);
+    ui->buttonUpgrade->hide();
 
     connect(ui->buttonDismiss, &QPushButton::clicked, this, &QDialog::reject);
     connect(ui->buttonUpgrade, &QPushButton::clicked, this, &OverQuotaDialog::onUpgradeClicked);

@@ -1,6 +1,7 @@
 #include "MegaApplication.h"
 
 #include "AccountDetailsManager.h"
+#include "AccountSwitcher.h"
 #include "AccountStatusController.h"
 #include "AppStatsEvents.h"
 #include "Avatar.h"
@@ -182,6 +183,10 @@ MegaApplication::MegaApplication(int& argc, char** argv):
     // queued connections; the type must also be registered at runtime.
     qRegisterMetaType<QQueue<QString>>("QQueue<QString>");
 
+    Preferences::loadReportedVersion(MegaApplication::applicationDataPath(),
+                                     QCoreApplication::applicationDirPath());
+    QCoreApplication::setApplicationVersion(QString::number(Preferences::reportedVersionCode()));
+
     bool logToStdout = false;
 
 #if defined(LOG_TO_STDOUT)
@@ -199,7 +204,7 @@ MegaApplication::MegaApplication(int& argc, char** argv):
 
     if (args.contains(QLatin1String("--version")))
     {
-        QTextStream(stdout) << getMEGAString() << " v" << Preferences::VERSION_STRING << " ("
+        QTextStream(stdout) << getMEGAString() << " v" << Preferences::reportedVersionString() << " ("
                             << Preferences::SDK_ID << ")" << Qt::endl;
         ::exit(0);
     }
@@ -603,7 +608,7 @@ void MegaApplication::initialize()
                                     Preferences::CLIENT_KEY,
                                     mGfxProvider.get(),
                                     basePath.toUtf8().constData(),
-                                    Preferences::USER_AGENT.toUtf8().constData(),
+                                    Preferences::reportedUserAgent().toUtf8().constData(),
                                     !preferences->SSLcertificateException());
     megaApi->disableGfxFeatures(mDisableGfx);
     MegaApiStartupConfig::initialConfiguration(megaApi);
@@ -612,7 +617,7 @@ void MegaApplication::initialize()
                                     Preferences::CLIENT_KEY,
                                     nullptr,
                                     basePath.toUtf8().constData(),
-                                    Preferences::USER_AGENT.toUtf8().constData(),
+                                    Preferences::reportedUserAgent().toUtf8().constData(),
                                     !preferences->SSLcertificateException());
     megaApiFolders->disableGfxFeatures(true);
     MegaApiStartupConfig::initialConfiguration(megaApiFolders);
@@ -685,8 +690,8 @@ void MegaApplication::initialize()
     megaApi->log(MegaApi::LOG_LEVEL_INFO,
                  QString::fromUtf8("MEGA Desktop App is starting. Version string: %1   Version "
                                    "code: %2.%3-%4   User-Agent: %5")
-                     .arg(Preferences::VERSION_STRING)
-                     .arg(Preferences::VERSION_CODE)
+                     .arg(Preferences::reportedVersionString())
+                     .arg(Preferences::reportedVersionCode())
                      .arg(Preferences::VERSION_RC)
                      .arg(Preferences::BUILD_ID)
                      .arg(QString::fromUtf8(megaApi->getUserAgent()))
@@ -1074,9 +1079,8 @@ void MegaApplication::updateTrayIcon()
         animation = TrayIconManager::Animation::None;
     }
 
-    QString tooltip = QString::fromUtf8("%1 %2\n")
-                          .arg(QString::fromUtf8("MEGA"))
-                          .arg(Preferences::VERSION_STRING);
+    QString tooltip = AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n")
+                          + Preferences::reportedVersionString();
 
     if (updateAvailable)
     {
@@ -1144,8 +1148,8 @@ void MegaApplication::start()
     updateTrayIconMenu();
 
     mTrayIconManager->startAnimation(TrayIconManager::Animation::Progress);
-    mTrayIconManager->setTooltip(QCoreApplication::applicationName() + QString::fromUtf8(" ") +
-                                 Preferences::VERSION_STRING + QString::fromUtf8("\n") +
+    mTrayIconManager->setTooltip(AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n") +
+                                 Preferences::reportedVersionString() + QString::fromUtf8("\n") +
                                  tr("Logging in"));
     mTrayIconManager->show();
 
@@ -1290,8 +1294,6 @@ void MegaApplication::start()
             &MegaApplication::userActive,
             mDiscountStateMachine,
             &DiscountStateMachine::userActive);
-
-    mDiscountStateMachine->start();
 
     updateTrayIcon();
 
@@ -2798,12 +2800,6 @@ void MegaApplication::clearMenu(QMenu* menu, bool deleteAction)
 
 void MegaApplication::startHttpServer()
 {
-    if (!httpServer)
-    {
-        httpServer = new HTTPServer(megaApi, Preferences::HTTP_PORT);
-        ConnectServerSignals(httpServer);
-        MegaApi::log(MegaApi::LOG_LEVEL_INFO, "Local HTTP server started");
-    }
 }
 
 void MegaApplication::initLocalServer()
@@ -3212,7 +3208,10 @@ void MegaApplication::enableTransferActions(bool enable)
     windowsFilesAction->setEnabled(enable);
     windowsUploadAction->setEnabled(enable);
     windowsDownloadAction->setEnabled(enable);
-    windowsStreamAction->setEnabled(enable);
+    if (windowsStreamAction)
+    {
+        windowsStreamAction->setEnabled(enable);
+    }
 #endif
 
     if(updateAvailable && updateAction)
@@ -3229,7 +3228,10 @@ void MegaApplication::enableTransferActions(bool enable)
     importFromCloudAction->setEnabled(enable);
     uploadAction->setEnabled(enable);
     downloadAction->setEnabled(enable);
-    streamAction->setEnabled(enable);
+    if (streamAction)
+    {
+        streamAction->setEnabled(enable);
+    }
     settingsAction->setEnabled(enable);
 
     if (mSyncs2waysMenu)
@@ -3747,35 +3749,6 @@ void MegaApplication::setMaxDownloadSpeed(int limit)
 
 void MegaApplication::startUpdateTask()
 {
-    if (appfinished)
-    {
-        return;
-    }
-
-#if defined(WIN32) || defined(__APPLE__)
-    if (!updateThread && preferences->canUpdate(MegaApplication::applicationFilePath()))
-    {
-        updateThread = new QThread();
-        updateTask = new UpdateTask(megaApi, MegaApplication::applicationDirPath(), isPublic);
-        updateTask->moveToThread(updateThread);
-
-        connect(this, SIGNAL(startUpdaterThread()), updateTask, SLOT(startUpdateThread()), Qt::UniqueConnection);
-        connect(this, SIGNAL(tryUpdate()), updateTask, SLOT(checkForUpdates()), Qt::UniqueConnection);
-        connect(this, SIGNAL(installUpdate()), updateTask, SLOT(installUpdate()), Qt::UniqueConnection);
-
-        connect(updateTask, SIGNAL(updateCompleted()), this, SLOT(onUpdateCompleted()), Qt::UniqueConnection);
-        connect(updateTask, SIGNAL(updateAvailable(bool)), this, SLOT(onUpdateAvailable(bool)), Qt::UniqueConnection);
-        connect(updateTask, SIGNAL(installingUpdate(bool)), this, SLOT(onInstallingUpdate(bool)), Qt::UniqueConnection);
-        connect(updateTask, SIGNAL(updateNotFound(bool)), this, SLOT(onUpdateNotFound(bool)), Qt::UniqueConnection);
-        connect(updateTask, SIGNAL(updateError()), this, SLOT(onUpdateError()), Qt::UniqueConnection);
-
-        connect(updateThread, SIGNAL(finished()), updateTask, SLOT(deleteLater()), Qt::UniqueConnection);
-        connect(updateThread, SIGNAL(finished()), updateThread, SLOT(deleteLater()), Qt::UniqueConnection);
-
-        updateThread->start();
-        emit startUpdaterThread();
-    }
-#endif
 }
 
 void MegaApplication::stopUpdateTask()
@@ -4159,13 +4132,6 @@ void MegaApplication::onDismissStorageOverquota(bool overStorage)
 
 void MegaApplication::checkForUpdates()
 {
-    if (appfinished)
-    {
-        return;
-    }
-
-    this->showInfoMessage(tr("Checking for updates..."));
-    emit tryUpdate();
 }
 
 void MegaApplication::showTrayMenu(QPoint *point)
@@ -4299,8 +4265,8 @@ void MegaApplication::toggleLogging()
         {
             megaApi->setLogExtraForModules(true, true);
 
-            MegaApi::log(MegaApi::LOG_LEVEL_INFO, QString::fromUtf8("Version string: %1   Version code: %2.%3   User-Agent: %4").arg(Preferences::VERSION_STRING)
-                     .arg(Preferences::VERSION_CODE).arg(Preferences::BUILD_ID).arg(QString::fromUtf8(megaApi->getUserAgent())).toUtf8().constData());
+            MegaApi::log(MegaApi::LOG_LEVEL_INFO, QString::fromUtf8("Version string: %1   Version code: %2.%3   User-Agent: %4").arg(Preferences::reportedVersionString())
+                     .arg(Preferences::reportedVersionCode()).arg(Preferences::BUILD_ID).arg(QString::fromUtf8(megaApi->getUserAgent())).toUtf8().constData());
         }
     }
 }
@@ -4484,7 +4450,7 @@ void MegaApplication::showChangeLog()
         return;
     }
 
-    auto changeLogDialog = new ChangeLogDialog(Preferences::VERSION_STRING, Preferences::SDK_ID, Preferences::CHANGELOG);
+    auto changeLogDialog = new ChangeLogDialog(Preferences::reportedVersionString(), Preferences::SDK_ID, Preferences::CHANGELOG);
     DialogOpener::showDialog<ChangeLogDialog>(changeLogDialog);
 }
 
@@ -4696,22 +4662,52 @@ void MegaApplication::downloadACtionClickedWithHandles(const QList<MegaHandle> &
 
 void MegaApplication::streamActionClicked()
 {
-    if (appfinished)
+}
+
+void MegaApplication::switchAccount(const QString& email)
+{
+    AccountSwitcher::switchTo(this, email);
+}
+
+void MegaApplication::addSavedAccount()
+{
+    AccountSwitcher::addAccount(this);
+}
+
+void MegaApplication::forgetSavedAccount(const QString& email)
+{
+    AccountSwitcher::forget(this, email);
+}
+
+void MegaApplication::populateAccountsMenu(QMenu* menu)
+{
+    if (!menu)
     {
         return;
     }
 
-    mStatsEventHandler->sendTrackedEvent(AppStatsEvents::EventType::MENU_STREAM_CLICKED,
-                                         sender(), streamAction, true);
-
-    mTransferQuota->checkStreamingAlertDismissed([this](int result){
-        if(result == QDialog::Rejected)
-        {
-            auto streamSelector = new StreamingFromMegaDialog(megaApi, megaApiFolders);
-            connect(mTransferQuota.get(), &TransferQuota::waitTimeIsOver, streamSelector, &StreamingFromMegaDialog::updateStreamingState);
-            DialogOpener::showDialog<StreamingFromMegaDialog>(streamSelector);
-        }
-    });
+    auto savedPreferences = Preferences::instance();
+    const QString current = savedPreferences->logged() ? savedPreferences->email() : QString();
+    const QStringList emails = savedPreferences->savedAccountEmails();
+    QMenu* accounts = menu->addMenu(tr("Accounts"));
+    for (const QString& email: emails)
+    {
+        QAction* action = accounts->addAction(email);
+        action->setCheckable(true);
+        action->setChecked(email == current);
+        connect(action,
+                &QAction::triggered,
+                this,
+                [this, email]()
+                {
+                    switchAccount(email);
+                });
+    }
+    if (emails.size() < AccountSwitcher::kMaxAccounts)
+    {
+        accounts->addSeparator();
+        accounts->addAction(tr("Add account..."), this, &MegaApplication::addSavedAccount);
+    }
 }
 
 void MegaApplication::importFromCloudActionClicked()
@@ -4840,8 +4836,9 @@ void MegaApplication::createTrayIcon()
 
     updateTrayIconMenu();
 
-    QString initialTooltip = QCoreApplication::applicationName() + QString::fromUtf8(" ") +
-                             Preferences::VERSION_STRING + QString::fromUtf8("\n") + tr("Starting");
+    QString initialTooltip = AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n") +
+                             Preferences::reportedVersionString() + QString::fromUtf8("\n") +
+                             tr("Starting");
 
     mTrayIconManager->setIconAndTooltip(QStringLiteral("synching"), initialTooltip);
     mTrayIconManager->startAnimation(TrayIconManager::Animation::Progress);
@@ -5147,58 +5144,7 @@ void MegaApplication::closeUpsellStorageDialog()
 
 void MegaApplication::showUpsellDialog(UpsellPlans::ViewMode viewMode)
 {
-    if (!mDiscountPolicy || !mDiscountPolicy->isCampaignActive() || !mDiscountStateMachine ||
-        mDiscountStateMachine->isInCooldownState())
-    {
-        auto dialogInfo(DialogOpener::findDialog<QmlDialogWrapper<UpsellComponent>>());
-        if (dialogInfo)
-        {
-            dialogInfo->getDialog()->wrapper()->setViewMode(viewMode);
-        }
-        else
-        {
-            dialogInfo = QMLComponent::addDialog<UpsellComponent>(nullptr, viewMode);
-            dialogInfo->getDialog()->setShowWhenCreated();
-        }
-    }
-    else
-    {
-        emit enterOverquota();
-
-        // We don't want to show both upsell dialog and discount dialog back to back, but still want
-        // to show the upsell dialog, so we leave OQ_COOL_DOWN_AFTER_OFFER_INTERVAL_MS after showin
-        // the discount dialog. To do that, we postdate the last time the upsell was shown to its
-        // disable duration minus OQ_COOL_DOWN_AFTER_OFFER_INTERVAL_MS
-        switch (viewMode)
-        {
-            case UpsellPlans::ViewMode::TRANSFER_EXCEEDED:
-            {
-                preferences->setTransferOverQuotaDialogLastExecution(
-                    std::chrono::system_clock::now() -
-                    Preferences::OVER_QUOTA_DIALOG_DISABLE_DURATION +
-                    Preferences::OQ_COOL_DOWN_AFTER_OFFER_INTERVAL_MS);
-                break;
-            }
-            case UpsellPlans::ViewMode::STORAGE_ALMOST_FULL:
-            {
-                preferences->setAlmostOverStorageDialogExecution(
-                    QDateTime::currentMSecsSinceEpoch() -
-                    Preferences::OVER_QUOTA_DIALOG_DISABLE_DURATION.count() +
-                    Preferences::OQ_COOL_DOWN_AFTER_OFFER_INTERVAL_MS.count());
-                break;
-            }
-            case UpsellPlans::ViewMode::STORAGE_FULL:
-            {
-                preferences->setOverStorageDialogExecution(
-                    QDateTime::currentMSecsSinceEpoch() -
-                    Preferences::OVER_QUOTA_DIALOG_DISABLE_DURATION.count() +
-                    Preferences::OQ_COOL_DOWN_AFTER_OFFER_INTERVAL_MS.count());
-                break;
-            }
-            default:
-                break;
-        }
-    }
+    Q_UNUSED(viewMode);
 }
 
 void MegaApplication::processSetDownload(const QString& publicLink,
@@ -6294,43 +6240,18 @@ void MegaApplication::createInfoDialogMenus()
                    tr("Download"),
                    &MegaApplication::downloadActionClicked,
                    QString::fromLatin1(":/images/icons/tray/windows/download.svg"));
-    recreateAction(&windowsStreamAction,
-                   windowsMenu,
-                   tr("Stream"),
-                   &MegaApplication::streamActionClicked,
-                   QString::fromLatin1(":/images/icons/tray/windows/stream.svg"));
     recreateAction(&windowsTransferManagerAction,
                    windowsMenu,
                    tr("Transfer manager"),
                    &MegaApplication::transferManagerActionClicked,
                    QString::fromLatin1(":/images/icons/tray/windows/transfer_manager.svg"));
 
-    bool windowsUpdateActionEnabled = true;
-    if (windowsUpdateAction)
-    {
-        windowsUpdateActionEnabled = windowsUpdateAction->isEnabled();
-        windowsUpdateAction->deleteLater();
-        windowsUpdateAction = nullptr;
-    }
-
-    if (updateAvailable)
-    {
-        windowsUpdateAction = new QAction(tr("Install update"), this);
-        windowsUpdateAction->setEnabled(windowsUpdateActionEnabled);
-
-        windowsMenu->addAction(windowsUpdateAction);
-
-        connect(windowsUpdateAction, &QAction::triggered, this, &MegaApplication::onInstallUpdateClicked);
-
-        windowsMenu->addSeparator();
-    }
-
     windowsMenu->addAction(windowsFilesAction);
     windowsMenu->addAction(windowsImportLinksAction);
     windowsMenu->addAction(windowsUploadAction);
     windowsMenu->addAction(windowsDownloadAction);
-    windowsMenu->addAction(windowsStreamAction);
     windowsMenu->addAction(windowsTransferManagerAction);
+    populateAccountsMenu(windowsMenu);
     windowsMenu->addAction(windowsSettingsAction);
     windowsMenu->addSeparator();
     windowsMenu->addAction(windowsExitAction);
@@ -6476,40 +6397,11 @@ void MegaApplication::createInfoDialogMenus()
                            {
                                downloadActionClicked();
                            });
-    recreateMegaMenuAction(&streamAction,
-                           infoDialogMenu,
-                           tr("Stream"),
-                           Utilities::getPixmapName(QLatin1String("stream"),
-                                                    Utilities::AttributeType::SMALL |
-                                                        Utilities::AttributeType::THIN |
-                                                        Utilities::AttributeType::OUTLINE,
-                                                    false)
-                               .toStdString()
-                               .c_str(),
-                           &MegaApplication::streamActionClicked);
 
     if (updateAction)
     {
         updateAction->deleteLater();
         updateAction = nullptr;
-    }
-
-    if (updateAvailable)
-    {
-        updateAction =
-            new MegaMenuItemAction(tr("Install update"),
-                                   Utilities::getPixmapName(QLatin1String("MEGA"),
-                                                            Utilities::AttributeType::SMALL |
-                                                                Utilities::AttributeType::THIN |
-                                                                Utilities::AttributeType::OUTLINE,
-                                                            false),
-                                   0);
-        connect(updateAction,
-                &QAction::triggered,
-                this,
-                &MegaApplication::onInstallUpdateClicked,
-                Qt::QueuedConnection);
-        infoDialogMenu->addAction(updateAction);
     }
 
     infoDialogMenu->addAction(MEGAWebAction);
@@ -6523,11 +6415,11 @@ void MegaApplication::createInfoDialogMenus()
     infoDialogMenu->addAction(importLinksAction);
     infoDialogMenu->addAction(uploadAction);
     infoDialogMenu->addAction(downloadAction);
-    infoDialogMenu->addAction(streamAction);
 
     infoDialogMenu->setProperty("class", QLatin1String("MegaMenu"));
     infoDialogMenu->setProperty("icon-token", QLatin1String("icon-primary"));
 
+    populateAccountsMenu(infoDialogMenu);
     infoDialogMenu->addAction(settingsAction);
     infoDialogMenu->addSeparator();
     infoDialogMenu->addAction(exitAction);
@@ -6560,8 +6452,8 @@ void MegaApplication::createGuestMenu()
 
     if (updateAvailable)
     {
-        updateActionGuest = new MenuItemAction(tr("Install update"), QLatin1String("://images/ico_about_MEGA.png"), guestMenu);
-        connect(updateActionGuest, &QAction::triggered, this, &MegaApplication::onInstallUpdateClicked);
+        updateActionGuest = new MenuItemAction(tr("About"), QLatin1String("://images/ico_about_MEGA.png"), guestMenu);
+        connect(updateActionGuest, &QAction::triggered, this, &MegaApplication::onAboutClicked);
     }
     else
     {
@@ -6575,6 +6467,7 @@ void MegaApplication::createGuestMenu()
 
     guestMenu->addAction(updateActionGuest);
     guestMenu->addSeparator();
+    populateAccountsMenu(guestMenu);
 
     if (AppState::instance()->getAppState() != AppState::INIT)
     {
@@ -7492,47 +7385,9 @@ void MegaApplication::startCrashReportingDialog()
 #ifdef USE_BREAKPAD
     if (preferences->isCrashed())
     {
-        MegaApi::log(MegaApi::LOG_LEVEL_INFO, "Crash detected, loading crash reports");
         preferences->setCrashed(false);
-        QStringList reports = CrashHandler::instance()->getPendingCrashReports();
-        if (reports.size())
-        {
-            MegaApi::log(MegaApi::LOG_LEVEL_INFO,
-                         QString::fromUtf8("Crash reports found: %1")
-                             .arg(reports.size())
-                             .toUtf8()
-                             .constData());
-            QPointer<CrashReportDialog> crashDialog = new CrashReportDialog();
-            crashDialog->setAttribute(Qt::WA_DeleteOnClose);
-            crashDialog->setParent(crashDialog->parentWidget(), crashDialog->windowFlags());
-            crashDialog->move(DialogOpener::initialDialogPosition(crashDialog->geometry().size()));
-            TokenParserWidgetManager::instance()->applyCurrentTheme(crashDialog);
-            TokenParserWidgetManager::instance()->registerWidgetForTheming(crashDialog);
-
-            connect(crashDialog,
-                    &CrashReportDialog::finished,
-                    this,
-                    [crashDialog, reports, this]()
-                    {
-                        if (crashDialog->result() != QDialog::Accepted)
-                        {
-                            MegaApi::log(MegaApi::LOG_LEVEL_INFO,
-                                         "Crash dialog cancelled, deleting crash report");
-                            CrashHandler::instance()->deletePendingCrashReports(reports);
-                            return;
-                        }
-                        applyProxySettings();
-                        const bool shouldSendLogs = crashDialog->sendLogs();
-                        CrashHandler::instance()->sendPendingCrashReports(
-                            crashDialog->getUserMessage(),
-                            shouldSendLogs);
-                    });
-            crashDialog->exec();
-        }
-        else
-        {
-            MegaApi::log(MegaApi::LOG_LEVEL_WARNING, "No crash reports found.");
-        }
+        CrashHandler::instance()->deletePendingCrashReports(
+            CrashHandler::instance()->getPendingCrashReports());
     }
 #endif
 }
@@ -7584,17 +7439,7 @@ void MegaApplication::showStalledIssuesDialog()
 
 void MegaApplication::requestUserDiscounts(bool skipChecks)
 {
-    auto logged = preferences->logged();
-    if (appfinished || !logged || AppState::instance()->getAppState() == AppState::FATAL_ERROR)
-    {
-        return;
-    }
-
-    auto difference = QDateTime::currentMSecsSinceEpoch() - preferences->getUserDiscountLastCheck();
-    if (skipChecks || (difference > Preferences::TARGETED_DISCOUNT_CHECK_INTERVAL_MS))
-    {
-        megaApi->getUserData();
-    }
+    Q_UNUSED(skipChecks);
 }
 
 bool MegaApplication::isOnboarding()

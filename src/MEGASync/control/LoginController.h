@@ -73,6 +73,7 @@ public:
     Q_INVOKABLE void setPasswordErrorMsg(const QString& msg);
     Q_INVOKABLE const QString& getCreateAccountErrorMsg() const;
     Q_INVOKABLE void setCreateAccountErrorMsg(const QString& msg);
+    void prefillEmail(const QString& email);
 
     void processOnboardingClosed();
     bool isFetchNodesFinished() const;
