@@ -31,8 +31,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
+
+      - name: Init MEGA SDK submodule
+        run: git submodule update --init src/MEGASync/mega
 
       - name: Export GitHub Actions cache for vcpkg
         uses: actions/github-script@v7
