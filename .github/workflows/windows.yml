@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: windows-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -74,6 +74,7 @@ jobs:
             -DENABLE_DESKTOP_UPDATE_GEN=OFF `
             -DENABLE_DESKTOP_APP_TESTS=OFF `
             -DENABLE_DESIGN_TOKENS_IMPORTER=OFF `
+            -DUSE_BREAKPAD=OFF `
             -S "${{ github.workspace }}" `
             -B "${{ github.workspace }}/build-x64"
 
