@@ -1,4 +1,5 @@
 # Build MEGAsyncX on GitHub-hosted Windows. First run is slow (vcpkg).
+# Kick: register this workflow with GitHub Actions.
 name: Windows
 
 on:
