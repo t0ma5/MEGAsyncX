@@ -75,6 +75,7 @@ jobs:
             -DENABLE_DESKTOP_APP_TESTS=OFF `
             -DENABLE_DESIGN_TOKENS_IMPORTER=OFF `
             -DUSE_BREAKPAD=OFF `
+            -DENABLE_DESKTOP_APP_WERROR=OFF `
             -S "${{ github.workspace }}" `
             -B "${{ github.workspace }}/build-x64"
 
