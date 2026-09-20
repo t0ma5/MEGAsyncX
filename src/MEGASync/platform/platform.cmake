@@ -114,7 +114,7 @@ if (WIN32)
 
     target_link_libraries(${ExecutableTarget}
         PRIVATE
-        Shell32 Shlwapi Powrprof taskschd dwmapi
+        Shell32 Shlwapi Powrprof taskschd dwmapi WindowsApp
     )
 elseif (APPLE)
     target_link_libraries(${ExecutableTarget}
