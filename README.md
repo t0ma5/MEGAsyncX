@@ -19,10 +19,17 @@ the current session, pauses its syncs, and restarts the app against the target a
 simultaneous sessions would put the account at risk under MEGA's terms, so the fork does not do it.
 
 The switcher asks for confirmation before every switch and before adding an account, refuses
-duplicate emails, and shows the state in the tray tooltip as `MEGAsyncX — you@example.com (3 of
-500)`. The tray submenu lists the active account first and then up to ten more alphabetically, with
-**All accounts…** opening the full list. Settings → Account has a filter box for finding one email
-among many.
+duplicate emails, and shows the state in the tray tooltip:
+
+```
+MEGAsyncX 6.6.1
+you@example.com (3/500)
+Up to date
+```
+
+The third line is the sync state, not an update check. The tray submenu lists the active account
+first and then up to ten more alphabetically, with **All accounts…** opening the full list.
+Settings → Account has a filter box for finding one email among many.
 
 **Import and export.** Settings → Account has **Import from File** and **Export**, and the tray
 submenu has **Import from file** next to **Add account…**. The file format is one account per line:

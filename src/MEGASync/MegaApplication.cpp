@@ -1080,8 +1080,7 @@ void MegaApplication::updateTrayIcon()
         animation = TrayIconManager::Animation::None;
     }
 
-    QString tooltip = AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n")
-                          + Preferences::reportedVersionString();
+    QString tooltip = AccountSwitcher::trayTooltipHeader() + QString::fromUtf8("\n");
 
     if (updateAvailable)
     {
@@ -1149,8 +1148,7 @@ void MegaApplication::start()
     updateTrayIconMenu();
 
     mTrayIconManager->startAnimation(TrayIconManager::Animation::Progress);
-    mTrayIconManager->setTooltip(AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n") +
-                                 Preferences::reportedVersionString() + QString::fromUtf8("\n") +
+    mTrayIconManager->setTooltip(AccountSwitcher::trayTooltipHeader() + QString::fromUtf8("\n") +
                                  tr("Logging in"));
     mTrayIconManager->show();
 
@@ -4867,9 +4865,8 @@ void MegaApplication::createTrayIcon()
 
     updateTrayIconMenu();
 
-    QString initialTooltip = AccountSwitcher::trayStatusLine() + QString::fromUtf8("\n") +
-                             Preferences::reportedVersionString() + QString::fromUtf8("\n") +
-                             tr("Starting");
+    QString initialTooltip =
+        AccountSwitcher::trayTooltipHeader() + QString::fromUtf8("\n") + tr("Starting");
 
     mTrayIconManager->setIconAndTooltip(QStringLiteral("synching"), initialTooltip);
     mTrayIconManager->startAnimation(TrayIconManager::Animation::Progress);

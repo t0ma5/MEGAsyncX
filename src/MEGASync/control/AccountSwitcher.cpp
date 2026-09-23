@@ -149,19 +149,19 @@ void AccountSwitcher::forget(MegaApplication* app, const QString& email)
     preferences->forgetSavedAccount(email);
 }
 
-QString AccountSwitcher::trayStatusLine()
+QString AccountSwitcher::trayTooltipHeader()
 {
     auto preferences = Preferences::instance();
-    const QStringList emails = preferences->savedAccountEmails();
-    const QString current = preferences->logged() ? preferences->email() : QString();
-    const int used = emails.size();
-    QString line = QString::fromUtf8("MEGAsyncX");
-    if (!current.isEmpty())
-    {
-        line += QString::fromUtf8(" — %1").arg(current);
-    }
-    line += tr(" (%1 of %2)").arg(used).arg(kMaxAccounts);
-    return line;
+    const QString current = preferences->logged() ? preferences->email() : tr("Not signed in");
+
+    QString header = QString::fromUtf8("MEGAsyncX ");
+    header += Preferences::reportedVersionString();
+    header += QLatin1Char('\n');
+    header += tr("%1 (%2/%3)")
+                  .arg(current)
+                  .arg(preferences->savedAccountEmails().size())
+                  .arg(kMaxAccounts);
+    return header;
 }
 
 void AccountSwitcher::importFromFile(QWidget* parent)

@@ -21,7 +21,8 @@ public:
     static void switchTo(MegaApplication* app, const QString& email);
     static void addAccount(MegaApplication* app);
     static void forget(MegaApplication* app, const QString& email);
-    static QString trayStatusLine();
+    // Two lines: "MEGAsyncX <version>" then "<email> (<used>/<max>)".
+    static QString trayTooltipHeader();
     static void handleDeadSession(MegaApplication* app, const QString& email);
 
     // email:password, one per line. Credentials are written and read in clear text.
