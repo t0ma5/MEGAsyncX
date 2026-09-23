@@ -592,13 +592,6 @@ void DesktopNotifications::sendOverStorageNotification(int state) const
     {
     case Preferences::STATE_ALMOST_OVER_STORAGE:
     {
-        auto notification = new DesktopAppNotification();
-        notification->setTitle(tr("Your account is almost full."));
-        notification->setText(tr("Upgrade now to a Pro account."));
-        notification->setActions(QStringList() << tr("Get Pro"));
-        notification->setImagePath(mStorageQuotaWarningIconPath);
-        connect(notification, &DesktopAppNotification::activated, this, &DesktopNotifications::redirectToUpgrade);
-        mNotificator->notify(notification);
         break;
     }
     case Preferences::STATE_OVER_STORAGE:

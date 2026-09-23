@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class MegaApplication;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 
@@ -19,15 +20,22 @@ private slots:
     void onSwitch();
     void onAdd();
     void onRemove();
+    void onImport();
+    void onExport();
+    void onForgetAll();
 
 private:
     QString selectedEmail() const;
 
     MegaApplication* mApp;
+    QLineEdit* mFilter;
     QListWidget* mList;
     QPushButton* mSwitchButton;
     QPushButton* mAddButton;
     QPushButton* mRemoveButton;
+    QPushButton* mImportButton;
+    QPushButton* mExportButton;
+    QPushButton* mForgetAllButton;
 };
 
 #endif

@@ -22,6 +22,8 @@ public:
     bool contains(const QString& key) const;
     bool containsGroup(QString groupName);
     bool isGroupEmpty();
+    // Innermost group name as passed in, before hashing. Empty when it was opened by index.
+    QString plainGroup() const;
     void remove(const QString & key);
     void clear();
     void sync();
@@ -34,6 +36,7 @@ protected:
     QString decrypt(const QString key, const QString value) const;
     QString hash(const QString key) const;
     QByteArray encryptionKey;
+    QStringList plainGroupStack;
 
     bool event(QEvent* event) override;
 };

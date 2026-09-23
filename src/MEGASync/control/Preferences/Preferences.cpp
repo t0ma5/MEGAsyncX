@@ -9,6 +9,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QScopeGuard>
 #include <QTextStream>
 
 #include <cassert>
@@ -254,6 +255,8 @@ const QString Preferences::syncsGroupByTagKey       = QString::fromLatin1("Syncs
 const QString Preferences::currentAccountKey        = QString::fromLatin1("currentAccount");
 const QString Preferences::savedAccountsKey         = QString::fromLatin1("savedAccounts");
 const QString Preferences::pendingGuestLoginKey     = QString::fromLatin1("pendingGuestLogin");
+const QString Preferences::pendingLoginEmailKey     = QString::fromLatin1("pendingLoginEmail");
+const QString Preferences::accountPasswordKey       = QString::fromLatin1("importedPassword");
 const QString Preferences::currentAccountStatusKey  = QString::fromLatin1("currentAccountStatus");
 const QString Preferences::needsFetchNodesKey       = QString::fromLatin1("needsFetchNodes");
 const QString Preferences::emailKey                 = QString::fromLatin1("email");
@@ -502,7 +505,13 @@ void Preferences::initialize(QString dataPath)
     const bool pendingGuest = mSettings->value(pendingGuestLoginKey, false).toBool();
     if (pendingGuest)
     {
+        // Start as a guest. The outgoing account keeps its own copy of the session inside its
+        // group, so only the general-scope keys are dropped here.
         mSettings->setValue(pendingGuestLoginKey, false);
+        mSettings->remove(currentAccountKey);
+        mSettings->remove(currentAccountStatusKey);
+        mSettings->remove(needsFetchNodesKey);
+        mSettings->remove(sessionKey);
         mSettings->sync();
         recoverDeprecatedNotificationsSettings();
         return;
@@ -2578,8 +2587,13 @@ void Preferences::resetGlobalSettings()
     QString currentAccount;
     if (logged())
     {
+        currentAccount = mSettings->plainGroup();
         mSettings->endGroup();
-        currentAccount = mSettings->value(currentAccountKey).toString();
+        const QString storedAccount = mSettings->value(currentAccountKey).toString();
+        if (!storedAccount.isEmpty())
+        {
+            currentAccount = storedAccount;
+        }
     }
 
     mSettings->remove(currentAccountKey);
@@ -3170,20 +3184,47 @@ void Preferences::setFullName(const QString& newFirstName, const QString& newLas
     }
 }
 
+// EncryptedSettings stores every value as a QString, and a QStringList of any size other than one
+// converts to an empty QString. Saved accounts therefore go in as one newline-joined string.
+QStringList Preferences::readSavedAccounts()
+{
+    const QString raw = mSettings->value(savedAccountsKey).toString();
+    if (raw.isEmpty())
+    {
+        return QStringList();
+    }
+    return raw.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+}
+
+void Preferences::writeSavedAccounts(const QStringList& accounts)
+{
+    mSettings->setValue(savedAccountsKey, accounts.join(QLatin1Char('\n')));
+}
+
 void Preferences::runAtSettingsRoot(const std::function<void()>& fn)
 {
-    QString currentAccount;
-    const bool inGroup = !mSettings->isGroupEmpty();
-    if (inGroup)
+    QString restoreTo;
+    if (!mSettings->isGroupEmpty())
     {
+        restoreTo = mSettings->plainGroup();
         mSettings->endGroup();
-        currentAccount = mSettings->value(currentAccountKey).toString();
+        const QString currentAccount = mSettings->value(currentAccountKey).toString();
+        if (!currentAccount.isEmpty())
+        {
+            restoreTo = currentAccount;
+        }
     }
+
+    const auto restoreGroup = qScopeGuard(
+        [this, restoreTo]()
+        {
+            if (!restoreTo.isEmpty())
+            {
+                mSettings->beginGroup(restoreTo);
+            }
+        });
+
     fn();
-    if (inGroup && !currentAccount.isEmpty())
-    {
-        mSettings->beginGroup(currentAccount);
-    }
 }
 
 QStringList Preferences::savedAccountEmails()
@@ -3192,9 +3233,14 @@ QStringList Preferences::savedAccountEmails()
     QStringList stored;
     QString current;
     runAtSettingsRoot([&]() {
-        stored = mSettings->value(savedAccountsKey).toStringList();
+        stored = readSavedAccounts();
         current = mSettings->value(currentAccountKey).toString();
     });
+    stored.removeDuplicates();
+    while (stored.size() > MAX_SAVED_ACCOUNTS)
+    {
+        stored.removeFirst();
+    }
     if (!current.isEmpty())
     {
         bool haveCurrent = false;
@@ -3208,13 +3254,12 @@ QStringList Preferences::savedAccountEmails()
         }
         if (!haveCurrent)
         {
+            if (stored.size() >= MAX_SAVED_ACCOUNTS)
+            {
+                stored.removeFirst();
+            }
             stored.prepend(current);
         }
-    }
-    stored.removeDuplicates();
-    while (stored.size() > MAX_SAVED_ACCOUNTS)
-    {
-        stored.removeLast();
     }
     return stored;
 }
@@ -3227,7 +3272,7 @@ void Preferences::rememberSavedAccount(const QString& email)
     }
     QMutexLocker locker(&mutex);
     runAtSettingsRoot([&]() {
-        QStringList stored = mSettings->value(savedAccountsKey).toStringList();
+        QStringList stored = readSavedAccounts();
         bool already = false;
         for (const QString& storedEmail: stored)
         {
@@ -3243,9 +3288,9 @@ void Preferences::rememberSavedAccount(const QString& email)
         }
         while (stored.size() > MAX_SAVED_ACCOUNTS)
         {
-            stored.removeLast();
+            stored.removeFirst();
         }
-        mSettings->setValue(savedAccountsKey, stored);
+        writeSavedAccounts(stored);
         mSettings->sync();
     });
 }
@@ -3258,14 +3303,45 @@ void Preferences::forgetSavedAccount(const QString& email)
     }
     QMutexLocker locker(&mutex);
     runAtSettingsRoot([&]() {
-        QStringList stored = mSettings->value(savedAccountsKey).toStringList();
-        stored.removeAll(email);
-        mSettings->setValue(savedAccountsKey, stored);
+        QStringList stored = readSavedAccounts();
+        for (int i = stored.size() - 1; i >= 0; --i)
+        {
+            if (QString::compare(stored.at(i), email, Qt::CaseInsensitive) == 0)
+            {
+                stored.removeAt(i);
+            }
+        }
+        writeSavedAccounts(stored);
         if (mSettings->containsGroup(email))
         {
             mSettings->beginGroup(email);
             mSettings->remove(sessionKey);
+            mSettings->remove(accountPasswordKey);
             mSettings->endGroup();
+        }
+        mSettings->sync();
+    });
+}
+
+void Preferences::forgetAllSavedSessions()
+{
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        const QString current = mSettings->value(currentAccountKey).toString();
+        const QStringList stored = readSavedAccounts();
+        for (const QString& email: stored)
+        {
+            if (QString::compare(email, current, Qt::CaseInsensitive) == 0)
+            {
+                continue;
+            }
+            if (mSettings->containsGroup(email))
+            {
+                mSettings->beginGroup(email);
+                mSettings->remove(sessionKey);
+                mSettings->remove(accountPasswordKey);
+                mSettings->endGroup();
+            }
         }
         mSettings->sync();
     });
@@ -3295,20 +3371,88 @@ QString Preferences::sessionForAccount(const QString& email)
     return session;
 }
 
+void Preferences::setAccountPassword(const QString& email, const QString& password)
+{
+    if (email.isEmpty())
+    {
+        return;
+    }
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        mSettings->beginGroup(email);
+        if (password.isEmpty())
+        {
+            mSettings->remove(accountPasswordKey);
+        }
+        else
+        {
+            mSettings->setValue(accountPasswordKey, password);
+        }
+        mSettings->endGroup();
+        mSettings->sync();
+    });
+}
+
+QString Preferences::accountPassword(const QString& email)
+{
+    if (email.isEmpty())
+    {
+        return QString();
+    }
+    QMutexLocker locker(&mutex);
+    QString password;
+    runAtSettingsRoot([&]() {
+        if (mSettings->containsGroup(email))
+        {
+            mSettings->beginGroup(email);
+            password = mSettings->value(accountPasswordKey).toString();
+            mSettings->endGroup();
+        }
+    });
+    return password;
+}
+
+QString Preferences::takePendingLoginEmail()
+{
+    QMutexLocker locker(&mutex);
+    QString email;
+    runAtSettingsRoot([&]() {
+        email = mSettings->value(pendingLoginEmailKey).toString();
+        if (!email.isEmpty())
+        {
+            mSettings->setValue(pendingLoginEmailKey, QString());
+            mSettings->sync();
+        }
+    });
+    return email;
+}
+
 void Preferences::prepareSwitchToAccount(const QString& email)
 {
     QMutexLocker locker(&mutex);
-    QString session;
     runAtSettingsRoot([&]() {
+        QString session;
         if (mSettings->containsGroup(email))
         {
             mSettings->beginGroup(email);
             session = mSettings->value(sessionKey).toString();
             mSettings->endGroup();
         }
-        mSettings->setValue(currentAccountKey, email);
-        mSettings->setValue(sessionKey, session);
-        mSettings->setValue(pendingGuestLoginKey, false);
+
+        if (session.isEmpty())
+        {
+            // Imported account with no session yet: restart as guest and let AccountSwitcher
+            // log in with the stored password.
+            mSettings->setValue(pendingGuestLoginKey, true);
+            mSettings->setValue(pendingLoginEmailKey, email);
+        }
+        else
+        {
+            mSettings->setValue(currentAccountKey, email);
+            mSettings->setValue(sessionKey, session);
+            mSettings->setValue(pendingGuestLoginKey, false);
+            mSettings->setValue(pendingLoginEmailKey, QString());
+        }
         mSettings->sync();
     });
 }

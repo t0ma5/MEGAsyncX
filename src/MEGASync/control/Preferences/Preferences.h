@@ -381,12 +381,16 @@ public:
     void unlink();
     void resetGlobalSettings();//Clear and remove any global setting. Not account specific ones.
 
-    static constexpr int MAX_SAVED_ACCOUNTS = 5;
+    static constexpr int MAX_SAVED_ACCOUNTS = 500;
     QStringList savedAccountEmails();
     void rememberSavedAccount(const QString& email);
     void forgetSavedAccount(const QString& email);
+    void forgetAllSavedSessions();
     bool hasSessionForAccount(const QString& email);
     QString sessionForAccount(const QString& email);
+    void setAccountPassword(const QString& email, const QString& password);
+    QString accountPassword(const QString& email);
+    QString takePendingLoginEmail();
     void prepareSwitchToAccount(const QString& email);
     void prepareAddAccount();
 
@@ -690,6 +694,8 @@ protected:
     static const QString currentAccountKey;
     static const QString savedAccountsKey;
     static const QString pendingGuestLoginKey;
+    static const QString pendingLoginEmailKey;
+    static const QString accountPasswordKey;
     static const QString currentAccountStatusKey;
     static const QString needsFetchNodesKey;
     static const QString syncsGroupByTagKey;
@@ -891,6 +897,8 @@ protected:
 private:
     void updateFullName();
     void runAtSettingsRoot(const std::function<void()>& fn);
+    QStringList readSavedAccounts();
+    void writeSavedAccounts(const QStringList& accounts);
 
 private slots:
     void setFullName(const QString& newFirstName, const QString& newLastName);

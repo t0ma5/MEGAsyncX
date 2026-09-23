@@ -43,16 +43,27 @@ QVariant EncryptedSettings::value(const QString &key, const QVariant &defaultVal
 void EncryptedSettings::beginGroup(const QString &prefix)
 {
     QSettings::beginGroup(hash(prefix));
+    plainGroupStack.append(prefix);
 }
 
 void EncryptedSettings::beginGroup(int numGroup)
 {
      QSettings::beginGroup(QSettings::childGroups().at(numGroup));
+     plainGroupStack.append(QString());
 }
 
 void EncryptedSettings::endGroup()
 {
     QSettings::endGroup();
+    if (!plainGroupStack.isEmpty())
+    {
+        plainGroupStack.removeLast();
+    }
+}
+
+QString EncryptedSettings::plainGroup() const
+{
+    return plainGroupStack.isEmpty() ? QString() : plainGroupStack.last();
 }
 
 qsizetype EncryptedSettings::numChildGroups()

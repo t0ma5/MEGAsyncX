@@ -151,12 +151,6 @@ void TransferManagerStatusHeaderWidget::updateStorageBannerText()
 {
     switch (mStorageQuotaState)
     {
-        case mega::MegaApi::STORAGE_STATE_ORANGE:
-        {
-            setAlmostFullStorageBannerText();
-            showAlmostFullStorageBanner();
-            break;
-        }
         case mega::MegaApi::STORAGE_STATE_RED:
         {
             setFullStorageBannerText();

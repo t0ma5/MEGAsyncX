@@ -29,9 +29,7 @@ Item {
     signal bannerActionClicked()
 
     function hasStateBanner() {
-        return !root.bannerAlreadyShown
-               && (progressState === AccountStateQuickWidget.WARNING
-                   || progressState === AccountStateQuickWidget.FULL)
+        return !root.bannerAlreadyShown && progressState === AccountStateQuickWidget.FULL
     }
 
     function normalStateColorForType(type) {

@@ -1004,18 +1004,6 @@ void InfoDialog::updateDialogState()
         overlay->setVisible(false);
         changePSAVisibility(false);
     }
-    else if (storageState == Preferences::STATE_ALMOST_OVER_STORAGE)
-    {
-        ui->bOQIcon->setIcon(QIcon(QString::fromLatin1("://images/storage_almost_full.png")));
-        ui->bOQIcon->setIconSize(QSize(64, 64));
-        ui->lOQTitle->setText(tr("You're running out of storage space."));
-        ui->lOQDesc->setText(tr("Upgrade to PRO now before your account runs full "
-                                "and your uploads to MEGA stop."));
-        ui->bBuyQuota->setText(tr("Buy more space"));
-        ui->sActiveTransfers->setCurrentWidget(ui->pOverquota);
-        overlay->setVisible(false);
-        changePSAVisibility(false);
-    }
     else if (transferQuotaState == QuotaState::WARNING && transferAlmostOverquotaAlertEnabled)
     {
         ui->bOQIcon->setIcon(QIcon(QString::fromLatin1(":/images/transfer_empty_64.png")));

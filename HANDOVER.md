@@ -107,7 +107,7 @@ Defaults in `cmake/modules/desktopapp_options.cmake`: Explorer ext OFF, updater 
 
 Runtime:
 
-- One process, one MegaApi session, **max 5 saved accounts**
+- One process, one MegaApi session, **max 500 saved accounts**
 - Tray **Accounts** submenu + Settings → Account list (Switch / Add / Remove)
 - Switch = save session, restart, FastLogin. Other accounts’ syncs stay idle
 - Add account = keep sessions, restart into login (cancel + quit restores previous account next launch)

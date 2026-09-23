@@ -1,4 +1,4 @@
-# Multi-account MEGAsync (one active, max 5)
+# Multi-account MEGAsync (one active, max 500)
 
 **Status:** approved. Phase 1 clone done (`76c343ed9` + SDK). Toolchain missing on this PC (no VS, no Qt 5.15, no desktop CMake). Win11 ARM64 runs the x64 exe emulated.
 

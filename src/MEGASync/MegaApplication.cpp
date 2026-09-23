@@ -72,6 +72,7 @@
 #include <QSettings>
 #include <QTranslator>
 
+#include <algorithm>
 #include <cassert>
 
 #ifdef Q_OS_LINUX
@@ -1349,6 +1350,7 @@ void MegaApplication::start()
         }
 
         onGlobalSyncStateChanged(megaApi);
+        AccountSwitcher::resumePendingLogin(this);
     }
     else //Otherwise, login in the account
     {
@@ -2353,17 +2355,6 @@ void MegaApplication::checkOverStorageStates(bool isOnboardingAboutClosing)
             }
         }
 
-        auto transferCount = getTransfersModel()->getTransfersCount();
-        uint pendingTransfers =  transferCount.pendingUploads || transferCount.pendingDownloads;
-
-        if (!pendingTransfers && ((QDateTime::currentMSecsSinceEpoch() - preferences->getOverStorageNotificationExecution()) > Preferences::ALMOST_OQ_UI_MESSAGE_INTERVAL_MS)
-                              && ((QDateTime::currentMSecsSinceEpoch() - preferences->getOverStorageDialogExecution()) > Preferences::ALMOST_OQ_UI_MESSAGE_INTERVAL_MS)
-                              && (!preferences->getAlmostOverStorageNotificationExecution() || (QDateTime::currentMSecsSinceEpoch() - preferences->getAlmostOverStorageNotificationExecution()) > Preferences::ALMOST_OQ_UI_MESSAGE_INTERVAL_MS))
-        {
-            preferences->setAlmostOverStorageNotificationExecution(QDateTime::currentMSecsSinceEpoch());
-            mStatsEventHandler->sendEvent(AppStatsEvents::EventType::ALMOST_OVER_STORAGE_NOTIF);
-            mOsNotifications->sendOverStorageNotification(Preferences::STATE_ALMOST_OVER_STORAGE);
-        }
     }
     else if (appliedStorageState == MegaApi::STORAGE_STATE_PAYWALL)
     {
@@ -4688,10 +4679,32 @@ void MegaApplication::populateAccountsMenu(QMenu* menu)
 
     auto savedPreferences = Preferences::instance();
     const QString current = savedPreferences->logged() ? savedPreferences->email() : QString();
-    const QStringList emails = savedPreferences->savedAccountEmails();
-    QMenu* accounts = menu->addMenu(tr("Accounts"));
-    for (const QString& email: emails)
+    QStringList emails = savedPreferences->savedAccountEmails();
+    emails.erase(std::remove_if(emails.begin(),
+                                emails.end(),
+                                [&current](const QString& email)
+                                {
+                                    return QString::compare(email, current, Qt::CaseInsensitive) ==
+                                           0;
+                                }),
+                 emails.end());
+    std::sort(emails.begin(),
+              emails.end(),
+              [](const QString& left, const QString& right)
+              {
+                  return QString::compare(left, right, Qt::CaseInsensitive) < 0;
+              });
+    const int total = emails.size() + (current.isEmpty() ? 0 : 1);
+    if (!current.isEmpty())
     {
+        emails.prepend(current);
+    }
+
+    QMenu* accounts = menu->addMenu(tr("Accounts"));
+    const int shown = std::min<int>(emails.size(), AccountSwitcher::kMenuAccountLimit);
+    for (int i = 0; i < shown; ++i)
+    {
+        const QString email = emails.at(i);
         QAction* action = accounts->addAction(email);
         action->setCheckable(true);
         action->setChecked(email == current);
@@ -4703,11 +4716,29 @@ void MegaApplication::populateAccountsMenu(QMenu* menu)
                     switchAccount(email);
                 });
     }
-    if (emails.size() < AccountSwitcher::kMaxAccounts)
+
+    if (emails.size() > shown)
     {
         accounts->addSeparator();
+        accounts->addAction(tr("All accounts (%1)...").arg(total),
+                            this,
+                            [this]()
+                            {
+                                openSettings(SettingsDialog::ACCOUNT_TAB);
+                            });
+    }
+
+    accounts->addSeparator();
+    if (total < AccountSwitcher::kMaxAccounts)
+    {
         accounts->addAction(tr("Add account..."), this, &MegaApplication::addSavedAccount);
     }
+    accounts->addAction(tr("Import from file"),
+                        this,
+                        [this]()
+                        {
+                            AccountSwitcher::importFromFile(infoDialog);
+                        });
 }
 
 void MegaApplication::importFromCloudActionClicked()
