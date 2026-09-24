@@ -223,6 +223,15 @@ if (CMAKE_HOST_APPLE)
             )
 endif()
 
+# Ship reported-version.txt beside the exe. The download folder then already has the file.
+add_custom_command(
+    TARGET MEGAsync POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/reported-version.txt"
+        "$<TARGET_FILE_DIR:MEGAsync>/reported-version.txt"
+    COMMENT "Copying reported-version.txt next to MEGAsync."
+)
+
 # Copy GFX worker if needed
 if(TARGET gfxworker)
     set_target_properties(gfxworker PROPERTIES OUTPUT_NAME "mega-desktop-app-gfxworker")

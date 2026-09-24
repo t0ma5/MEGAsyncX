@@ -91,15 +91,16 @@ stubbed out.
 
 ## Reported version
 
-The app writes a version into its User-Agent. `reported-version.txt`, placed next to the exe or in
-the data directory, overrides it:
+The app writes a version into its User-Agent. A `reported-version.txt` ships in the repo root and
+is copied next to `MEGAsyncX.exe` on every build, so a downloaded build already has it. Edit that
+file and restart. A copy in the data directory is used only when the exe folder has no file.
 
 ```
-6.7.2
+6.6.1
 ```
 
-That makes the app report `6.7.2` and version code `60702`. See
-[reported-version.txt.example](reported-version.txt.example). This is cosmetic. It changes the
+That makes the app report `6.6.1` and version code `60601`. See
+[reported-version.txt](reported-version.txt). This is cosmetic. It changes the
 string the app sends, nothing about how it syncs.
 
 ## Building

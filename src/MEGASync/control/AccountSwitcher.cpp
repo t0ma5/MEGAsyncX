@@ -28,6 +28,24 @@ bool confirmAction(const QString& text)
                                  QMessageBox::Yes | QMessageBox::No,
                                  QMessageBox::No) == QMessageBox::Yes;
 }
+
+// Raw QMessageBox picks up the app dark palette, so the label paints the same color as the
+// box and the window looks empty. Force a light box with dark text.
+void showAccountsNotice(const QString& text, bool problem)
+{
+    const QString body = text.isEmpty() ?
+                             AccountSwitcher::tr("Import finished, but there is no detail to show.") :
+                             text;
+    QMessageBox box(problem ? QMessageBox::Warning : QMessageBox::Information,
+                    AccountSwitcher::tr("Accounts"),
+                    body,
+                    QMessageBox::Ok);
+    box.setTextFormat(Qt::PlainText);
+    box.setStyleSheet(QStringLiteral(
+        "QMessageBox { background-color: #ffffff; }"
+        "QLabel { color: #1a1a1a; font-family: 'Segoe UI'; font-size: 13px; }"));
+    box.exec();
+}
 }
 
 void AccountSwitcher::persistCurrentSession(MegaApplication* app)
@@ -179,7 +197,8 @@ void AccountSwitcher::importFromFile(QWidget* parent)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        QMessageBox::warning(parent, tr("Accounts"), tr("Could not open %1.").arg(path));
+        Q_UNUSED(parent);
+        showAccountsNotice(tr("Could not open %1.").arg(path), true);
         return;
     }
 
@@ -187,12 +206,24 @@ void AccountSwitcher::importFromFile(QWidget* parent)
     QStringList known = preferences->savedAccountEmails();
     int added = 0;
     int updated = 0;
-    int malformed = 0;
+    int syntaxErrors = 0;
+    int missingPassword = 0;
     int overflow = 0;
+    QStringList details;
+
+    auto addDetail = [&details](const QString& line)
+    {
+        if (details.size() < 5)
+        {
+            details.append(line);
+        }
+    };
 
     QTextStream stream(&file);
+    int lineNumber = 0;
     while (!stream.atEnd())
     {
+        ++lineNumber;
         const QString line = stream.readLine().trimmed();
         if (line.isEmpty() || line.startsWith(QLatin1Char('#')))
         {
@@ -201,17 +232,25 @@ void AccountSwitcher::importFromFile(QWidget* parent)
 
         // Split on the first colon only: passwords may contain colons.
         const int separator = line.indexOf(QLatin1Char(':'));
-        if (separator <= 0 || separator == line.size() - 1)
+        if (separator <= 0)
         {
-            ++malformed;
+            ++syntaxErrors;
+            addDetail(tr("Line %1: expected email:password.").arg(lineNumber));
             continue;
         }
 
         const QString email = line.left(separator).trimmed();
         const QString password = line.mid(separator + 1);
+        if (password.trimmed().isEmpty())
+        {
+            ++missingPassword;
+            addDetail(tr("Line %1: %2 has no password.").arg(lineNumber).arg(email));
+            continue;
+        }
         if (!email.contains(QLatin1Char('@')))
         {
-            ++malformed;
+            ++syntaxErrors;
+            addDetail(tr("Line %1: \"%2\" is not an email.").arg(lineNumber).arg(email));
             continue;
         }
 
@@ -228,6 +267,7 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         if (!isKnown && known.size() >= kMaxAccounts)
         {
             ++overflow;
+            addDetail(tr("Line %1: %2 skipped, account limit reached.").arg(lineNumber).arg(email));
             continue;
         }
 
@@ -235,6 +275,7 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         if (isKnown)
         {
             ++updated;
+            addDetail(tr("%1 is already in the list. Stored password was replaced.").arg(email));
         }
         else
         {
@@ -244,11 +285,18 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         }
     }
 
-    QString report = tr("Added %1, updated %2.").arg(added).arg(updated);
-    if (malformed > 0)
+    QString report = tr("Added %1. Password updated for %2 already in the list.")
+                         .arg(added)
+                         .arg(updated);
+    if (syntaxErrors > 0)
     {
         report += QLatin1Char('\n');
-        report += tr("Skipped %1 line(s) that were not email:password.").arg(malformed);
+        report += tr("Skipped %1 line(s) that were not email:password.").arg(syntaxErrors);
+    }
+    if (missingPassword > 0)
+    {
+        report += QLatin1Char('\n');
+        report += tr("Skipped %1 line(s) with a missing password.").arg(missingPassword);
     }
     if (overflow > 0)
     {
@@ -256,7 +304,13 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         report +=
             tr("Skipped %1 account(s): the limit of %2 was reached.").arg(overflow).arg(kMaxAccounts);
     }
-    QMessageBox::information(parent, tr("Accounts"), report);
+    if (!details.isEmpty())
+    {
+        report += QLatin1Char('\n');
+        report += details.join(QLatin1Char('\n'));
+    }
+    const bool problem = syntaxErrors > 0 || missingPassword > 0 || overflow > 0;
+    showAccountsNotice(report, problem);
 }
 
 void AccountSwitcher::exportToFile(QWidget* parent)
