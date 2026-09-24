@@ -8,9 +8,20 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+namespace
+{
+void styleLikeMyAccount(QPushButton* button)
+{
+    button->setProperty(QStringLiteral("type"), QStringLiteral("secondary"));
+    button->setProperty(QStringLiteral("dimension"), QStringLiteral("small"));
+    button->setCursor(Qt::PointingHandCursor);
+    button->setAutoDefault(false);
+    button->setFocusPolicy(Qt::StrongFocus);
+}
+}
 
 AccountSwitcherWidget::AccountSwitcherWidget(MegaApplication* app, QWidget* parent):
     QWidget(parent),
@@ -24,6 +35,12 @@ AccountSwitcherWidget::AccountSwitcherWidget(MegaApplication* app, QWidget* pare
     mExportButton(new QPushButton(tr("Export"), this)),
     mForgetAllButton(new QPushButton(tr("Forget all"), this))
 {
+    styleLikeMyAccount(mSwitchButton);
+    styleLikeMyAccount(mAddButton);
+    styleLikeMyAccount(mRemoveButton);
+    styleLikeMyAccount(mImportButton);
+    styleLikeMyAccount(mExportButton);
+    styleLikeMyAccount(mForgetAllButton);
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(12, 0, 12, 12);
     layout->addWidget(
@@ -135,14 +152,9 @@ void AccountSwitcherWidget::onExport()
 
 void AccountSwitcherWidget::onForgetAll()
 {
-    const auto answer = QMessageBox::question(
-        this,
-        tr("Accounts"),
-        tr("Delete every stored session and password except the active account? Each account will "
-           "ask for a password on the next switch."),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-    if (answer != QMessageBox::Yes)
+    if (!AccountSwitcher::confirm(
+            tr("Delete every stored session and password except the active account? Each account will "
+               "ask for a password on the next switch.")))
     {
         return;
     }

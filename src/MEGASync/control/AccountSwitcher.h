@@ -21,6 +21,7 @@ public:
     static void switchTo(MegaApplication* app, const QString& email);
     static void addAccount(MegaApplication* app);
     static void forget(MegaApplication* app, const QString& email);
+    static bool confirm(const QString& text);
     // Two lines: "MEGAsyncX <version>" then "<email> (<used>/<max>)".
     static QString trayTooltipHeader();
     static void handleDeadSession(MegaApplication* app, const QString& email);

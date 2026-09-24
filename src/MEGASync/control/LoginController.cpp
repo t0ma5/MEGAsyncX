@@ -446,6 +446,22 @@ void LoginController::onRequestStart(mega::MegaRequest* request)
     }
 }
 
+bool LoginController::isWaitingForEmailConfirmation() const
+{
+    switch (getState())
+    {
+        case LOGGED_OUT:
+        case SIGN_UP:
+        case CHANGING_REGISTER_EMAIL:
+        case CREATING_ACCOUNT:
+        case CREATING_ACCOUNT_FAILED:
+        case WAITING_EMAIL_CONFIRMATION:
+            return true;
+        default:
+            return false;
+    }
+}
+
 void LoginController::onEvent(mega::MegaApi*, mega::MegaEvent* event)
 {
     if(event->getType() == mega::MegaEvent::EVENT_CONFIRM_USER_EMAIL)
@@ -453,8 +469,16 @@ void LoginController::onEvent(mega::MegaApi*, mega::MegaEvent* event)
         mNewAccount = true;
         setEmail(QString::fromLatin1(event->getText()));
         mPreferences->removeEphemeralCredentials();
-        setState(EMAIL_CONFIRMED);
-        emit emailConfirmed();
+
+        // The confirm-email event is delivered again while fetching nodes, right after the
+        // login that follows confirmation. Moving to EMAIL_CONFIRMED then overwrites
+        // FETCHING_NODES, so the onboarding dialog never opens. React only while signup
+        // is actually waiting on the email.
+        if (isWaitingForEmailConfirmation())
+        {
+            setState(EMAIL_CONFIRMED);
+            emit emailConfirmed();
+        }
     }
     else if (event->getType() == mega::MegaEvent::EVENT_STORAGE)
     {

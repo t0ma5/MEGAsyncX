@@ -8,4 +8,4 @@
 # Restart the app after edit.
 #
 # Put the GitHub tag from https://github.com/meganz/MEGAsync/releases
-6.6.1
+6.6.2

@@ -3,6 +3,7 @@
 #include "LoginController.h"
 #include "MegaApplication.h"
 #include "Preferences.h"
+#include "TokenParserWidgetManager.h"
 #include "megaapi.h"
 
 #include <QFileDialog>
@@ -20,17 +21,40 @@ bool emailsEqual(const QString& left, const QString& right)
     return QString::compare(left, right, Qt::CaseInsensitive) == 0;
 }
 
-bool confirmAction(const QString& text)
+void styleAccountDialog(QMessageBox& box)
 {
-    return QMessageBox::question(nullptr,
-                                 AccountSwitcher::tr("Accounts"),
-                                 text,
-                                 QMessageBox::Yes | QMessageBox::No,
-                                 QMessageBox::No) == QMessageBox::Yes;
+    auto* tokens = TokenParserWidgetManager::instance().get();
+    const auto css = [tokens](const char* name)
+    {
+        return tokens->getColor(QLatin1String(name)).name(QColor::HexArgb);
+    };
+    const QString page = css("page-background");
+    const QString text = css("text-primary");
+    const QString button = css("button-secondary");
+    const QString hover = css("button-secondary-hover");
+    const QString pressed = css("button-secondary-pressed");
+    box.setTextFormat(Qt::PlainText);
+    box.setStyleSheet(QStringLiteral(
+        "QMessageBox { background-color: %1; }"
+        "QLabel { color: %2; background-color: transparent; font-family: 'Segoe UI'; font-size: 13px; }"
+        "QPushButton { color: %2; background-color: %3; border: none; border-radius: 6px; "
+        "min-height: 26px; padding: 0 16px; font-weight: 500; }"
+        "QPushButton:hover { background-color: %4; }"
+        "QPushButton:pressed { background-color: %5; }")
+                           .arg(page, text, button, hover, pressed));
 }
 
-// Raw QMessageBox picks up the app dark palette, so the label paints the same color as the
-// box and the window looks empty. Force a light box with dark text.
+bool confirmAction(const QString& text)
+{
+    QMessageBox box(QMessageBox::Question,
+                    AccountSwitcher::tr("Accounts"),
+                    text,
+                    QMessageBox::Yes | QMessageBox::No);
+    box.setDefaultButton(QMessageBox::No);
+    styleAccountDialog(box);
+    return box.exec() == QMessageBox::Yes;
+}
+
 void showAccountsNotice(const QString& text, bool problem)
 {
     const QString body = text.isEmpty() ?
@@ -40,12 +64,14 @@ void showAccountsNotice(const QString& text, bool problem)
                     AccountSwitcher::tr("Accounts"),
                     body,
                     QMessageBox::Ok);
-    box.setTextFormat(Qt::PlainText);
-    box.setStyleSheet(QStringLiteral(
-        "QMessageBox { background-color: #ffffff; }"
-        "QLabel { color: #1a1a1a; font-family: 'Segoe UI'; font-size: 13px; }"));
+    styleAccountDialog(box);
     box.exec();
 }
+}
+
+bool AccountSwitcher::confirm(const QString& text)
+{
+    return confirmAction(text);
 }
 
 void AccountSwitcher::persistCurrentSession(MegaApplication* app)
@@ -92,10 +118,9 @@ void AccountSwitcher::switchTo(MegaApplication* app, const QString& email)
     if (!preferences->hasSessionForAccount(email) &&
         preferences->accountPassword(email).isEmpty())
     {
-        QMessageBox::warning(
-            nullptr,
-            tr("Accounts"),
-            tr("No saved session or password for %1. Log in again with Add account.").arg(email));
+        showAccountsNotice(
+            tr("No saved session or password for %1. Log in again with Add account.").arg(email),
+            true);
         return;
     }
 
@@ -123,9 +148,7 @@ void AccountSwitcher::addAccount(MegaApplication* app)
     auto preferences = Preferences::instance();
     if (preferences->savedAccountEmails().size() >= kMaxAccounts)
     {
-        QMessageBox::information(nullptr,
-                                 tr("Accounts"),
-                                 tr("Maximum of %1 accounts. Remove one first.").arg(kMaxAccounts));
+        showAccountsNotice(tr("Maximum of %1 accounts. Remove one first.").arg(kMaxAccounts), false);
         return;
     }
 
@@ -158,9 +181,7 @@ void AccountSwitcher::forget(MegaApplication* app, const QString& email)
     auto preferences = Preferences::instance();
     if (preferences->logged() && emailsEqual(preferences->email(), email))
     {
-        QMessageBox::information(nullptr,
-                                 tr("Accounts"),
-                                 tr("Log out to remove the active account."));
+        showAccountsNotice(tr("Log out to remove the active account."), false);
         return;
     }
 
@@ -329,23 +350,16 @@ void AccountSwitcher::exportToFile(QWidget* parent)
 
     if (withPassword == 0)
     {
-        QMessageBox::information(parent,
-                                 tr("Accounts"),
-                                 tr("No stored passwords to export. Only accounts added through "
-                                    "Import from File have one."));
+        showAccountsNotice(tr("No stored passwords to export. Only accounts added through "
+                              "Import from File have one."),
+                           false);
         return;
     }
 
-    const auto answer = QMessageBox::warning(
-        parent,
-        tr("Accounts"),
-        tr("Write %1 password(s) to a plain text file?\n\n"
-           "The file is NOT encrypted. Anyone who reads it gets full access to those MEGA "
-           "accounts. Store it somewhere safe or delete it when you are done.")
-            .arg(withPassword),
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-    if (answer != QMessageBox::Yes)
+    if (!confirmAction(tr("Write %1 password(s) to a plain text file?\n\n"
+                          "The file is NOT encrypted. Anyone who reads it gets full access to those MEGA "
+                          "accounts. Store it somewhere safe or delete it when you are done.")
+                           .arg(withPassword)))
     {
         return;
     }
@@ -363,7 +377,7 @@ void AccountSwitcher::exportToFile(QWidget* parent)
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate))
     {
-        QMessageBox::warning(parent, tr("Accounts"), tr("Could not write %1.").arg(path));
+        showAccountsNotice(tr("Could not write %1.").arg(path), true);
         return;
     }
 
@@ -391,7 +405,7 @@ void AccountSwitcher::exportToFile(QWidget* parent)
         report += QLatin1Char('\n');
         report += tr("Skipped %1 account(s) with no stored password.").arg(emails.size() - written);
     }
-    QMessageBox::information(parent, tr("Accounts"), report);
+    showAccountsNotice(report, false);
 }
 
 void AccountSwitcher::resumePendingLogin(MegaApplication* app)

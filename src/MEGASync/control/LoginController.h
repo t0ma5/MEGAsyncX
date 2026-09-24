@@ -119,6 +119,7 @@ private slots:
 
 private:
     void dumpSession();
+    bool isWaitingForEmailConfirmation() const;
     QString getRepeatedEmailMsg();
     void setEmail(const QString& email);
 

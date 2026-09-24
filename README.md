@@ -22,7 +22,7 @@ The switcher asks for confirmation before every switch and before adding an acco
 duplicate emails, and shows the state in the tray tooltip:
 
 ```
-MEGAsyncX 6.6.1
+MEGAsyncX 6.6.2
 you@example.com (3/500)
 Up to date
 ```
@@ -96,10 +96,10 @@ is copied next to `MEGAsyncX.exe` on every build, so a downloaded build already 
 file and restart. A copy in the data directory is used only when the exe folder has no file.
 
 ```
-6.6.1
+6.6.2
 ```
 
-That makes the app report `6.6.1` and version code `60601`. See
+That makes the app report `6.6.2` and version code `60602`. See
 [reported-version.txt](reported-version.txt). This is cosmetic. It changes the string the app
 sends, nothing about how it syncs.
 

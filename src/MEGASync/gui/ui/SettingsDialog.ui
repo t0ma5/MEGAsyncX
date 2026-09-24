@@ -368,7 +368,7 @@ border: none
          <enum>Qt::StrongFocus</enum>
         </property>
         <property name="text">
-         <string>Account</string>
+         <string>Accounts</string>
         </property>
         <property name="icon">
          <iconset resource="../Resources_common.qrc">
