@@ -100,14 +100,13 @@ file and restart. A copy in the data directory is used only when the exe folder 
 ```
 
 That makes the app report `6.6.1` and version code `60601`. See
-[reported-version.txt](reported-version.txt). This is cosmetic. It changes the
-string the app sends, nothing about how it syncs.
+[reported-version.txt](reported-version.txt). This is cosmetic. It changes the string the app
+sends, nothing about how it syncs.
 
 ## Building
 
 Windows x64 only, with Qt 5.15.2 MSVC 2019 64-bit, MSVC v143, and vcpkg. Full local instructions
-are in [HANDOVER.md](HANDOVER.md); the upstream Windows notes are still in
-[README.win.md](README.win.md).
+from the upstream Windows notes are still in [README.win.md](README.win.md).
 
 There is also a GitHub Actions workflow at `.github/workflows/windows.yml` that produces an
 unsigned `MEGAsyncX-windows-x64` artifact. The first run takes around two and a half hours because
@@ -115,7 +114,11 @@ vcpkg builds every dependency from source; later runs reuse the cache.
 
 Because the binary is unsigned, SmartScreen will warn on first launch.
 
-# MEGA Desktop Application
+
+---------------------------------------------------------------------------------
+
+
+# MEGA Desktop Application (Original)
 
 Easy automated syncing and backup between your computers and your MEGA cloud drive.
 This repository contains all the development history of the official MEGA Desktop Application.
@@ -126,7 +129,7 @@ Changes that you make on your device will also be made on the MEGA Cloud Drive. 
 changes made in your MEGA Cloud Drive (such as renaming, moving and deleting) will also be
 made to the synced folders on your device.
 
-https://mega.io/syncing
+[https://mega.io/syncing](https://mega.io/syncing)
 
 # Supported Platforms
 
@@ -135,8 +138,10 @@ The minimum version of Windows Server required at the moment is Windows Server 2
 The minimum version of macOS required at the moment is macOS Catalina 10.15. 
 
 We officially support a handful of Linux flavors based on Debian and RedHat, such as:
+
 - Debian
 - Ubuntu
 - Mint
 - Fedora
 - CentOS
+
