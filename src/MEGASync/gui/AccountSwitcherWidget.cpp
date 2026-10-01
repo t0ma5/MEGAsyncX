@@ -15,8 +15,8 @@ namespace
 {
 void styleLikeMyAccount(QPushButton* button)
 {
-    button->setProperty(QStringLiteral("type"), QStringLiteral("secondary"));
-    button->setProperty(QStringLiteral("dimension"), QStringLiteral("small"));
+    button->setProperty("type", QStringLiteral("secondary"));
+    button->setProperty("dimension", QStringLiteral("small"));
     button->setCursor(Qt::PointingHandCursor);
     button->setAutoDefault(false);
     button->setFocusPolicy(Qt::StrongFocus);
