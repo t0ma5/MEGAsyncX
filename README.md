@@ -1,5 +1,7 @@
 # MEGAsyncX
 
+![MEGAsyncX](MEGAsyncX-windows-x64.png)
+
 MEGAsyncX is a personal, non-commercial fork of the MEGA Desktop Application for **Windows x64**.
 It keeps the sync engine untouched and changes what the app does around it: several accounts in one
 install, no upgrade nagging, no telemetry, no auto-updater, and no Explorer integration.
