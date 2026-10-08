@@ -1419,6 +1419,22 @@ void Preferences::setProExpirityTime(long long value)
 }
 /************ NOTIFICATIONS GETTERS/SETTERS ************/
 
+namespace
+{
+bool defaultForNotificationType(Preferences::NotificationsTypes type)
+{
+    switch (type)
+    {
+        case Preferences::NotificationsTypes::GENERAL_SWITCH_NOTIFICATIONS:
+        case Preferences::NotificationsTypes::INFO_MESSAGES:
+        case Preferences::NotificationsTypes::COMPLETED_UPLOADS_DOWNLOADS:
+            return true;
+        default:
+            return false;
+    }
+}
+}
+
 bool Preferences::isNotificationEnabled(NotificationsTypes type, bool includingGeneralSwitch)
 {
     bool value(false);
@@ -1429,7 +1445,7 @@ bool Preferences::isNotificationEnabled(NotificationsTypes type, bool includingG
 
         if(!key.isEmpty())
         {
-            value = getValueConcurrent<bool>(key, defaultShowNotifications);
+            value = getValueConcurrent<bool>(key, defaultForNotificationType(type));
         }
     }
 
@@ -3289,6 +3305,40 @@ void Preferences::rememberSavedAccount(const QString& email)
         while (stored.size() > MAX_SAVED_ACCOUNTS)
         {
             stored.removeFirst();
+        }
+        writeSavedAccounts(stored);
+        mSettings->sync();
+    });
+}
+
+void Preferences::setSavedAccountEmails(const QStringList& emails)
+{
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        QStringList stored;
+        for (const QString& email: emails)
+        {
+            if (email.isEmpty())
+            {
+                continue;
+            }
+            bool already = false;
+            for (const QString& storedEmail: stored)
+            {
+                if (QString::compare(storedEmail, email, Qt::CaseInsensitive) == 0)
+                {
+                    already = true;
+                    break;
+                }
+            }
+            if (!already)
+            {
+                stored.append(email);
+            }
+            if (stored.size() >= MAX_SAVED_ACCOUNTS)
+            {
+                break;
+            }
         }
         writeSavedAccounts(stored);
         mSettings->sync();

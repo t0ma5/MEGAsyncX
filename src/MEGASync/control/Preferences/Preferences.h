@@ -384,6 +384,7 @@ public:
     static constexpr int MAX_SAVED_ACCOUNTS = 500;
     QStringList savedAccountEmails();
     void rememberSavedAccount(const QString& email);
+    void setSavedAccountEmails(const QStringList& emails);
     void forgetSavedAccount(const QString& email);
     void forgetAllSavedSessions();
     bool hasSessionForAccount(const QString& email);

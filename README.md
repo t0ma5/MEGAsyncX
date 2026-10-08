@@ -29,8 +29,9 @@ you@example.com (3/500)
 Up to date
 ```
 
-The third line is the sync state, not an update check. The tray submenu lists the active account
-first and then up to ten more alphabetically, with **All accounts…** opening the full list.
+The third line is the sync state, not an update check. The tray submenu shows up to ten accounts
+from the saved list, with the active account in the middle of that slice. A side that runs out of
+accounts gives the spare slots to the other side. **All accounts…** opens the full list.
 Settings → Account has a filter box for finding one email among many.
 
 **Import and export.** Settings → Account has **Import from File** and **Export**, and the tray

@@ -4677,35 +4677,47 @@ void MegaApplication::populateAccountsMenu(QMenu* menu)
 
     auto savedPreferences = Preferences::instance();
     const QString current = savedPreferences->logged() ? savedPreferences->email() : QString();
-    QStringList emails = savedPreferences->savedAccountEmails();
-    emails.erase(std::remove_if(emails.begin(),
-                                emails.end(),
-                                [&current](const QString& email)
-                                {
-                                    return QString::compare(email, current, Qt::CaseInsensitive) ==
-                                           0;
-                                }),
-                 emails.end());
-    std::sort(emails.begin(),
-              emails.end(),
-              [](const QString& left, const QString& right)
-              {
-                  return QString::compare(left, right, Qt::CaseInsensitive) < 0;
-              });
-    const int total = emails.size() + (current.isEmpty() ? 0 : 1);
+    const QStringList emails = savedPreferences->savedAccountEmails();
+    const int total = emails.size();
+
+    int activeIndex = -1;
     if (!current.isEmpty())
     {
-        emails.prepend(current);
+        for (int i = 0; i < emails.size(); ++i)
+        {
+            if (QString::compare(emails.at(i), current, Qt::CaseInsensitive) == 0)
+            {
+                activeIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Window of at most 10, active account in the middle. Each side starts at up to 5.
+    // A side that hits the start or end gives its unused slots to the other side.
+    int shownStart = 0;
+    int shown = std::min<int>(total, AccountSwitcher::kMenuAccountLimit);
+    if (activeIndex >= 0 && total > AccountSwitcher::kMenuAccountLimit)
+    {
+        const int side = AccountSwitcher::kMenuAccountLimit / 2;
+        int before = std::min(side, activeIndex);
+        int after = std::min(AccountSwitcher::kMenuAccountLimit - 1 - before,
+                             total - activeIndex - 1);
+        if (before + after + 1 < AccountSwitcher::kMenuAccountLimit)
+        {
+            before = std::min(activeIndex, AccountSwitcher::kMenuAccountLimit - 1 - after);
+        }
+        shownStart = activeIndex - before;
+        shown = before + 1 + after;
     }
 
     QMenu* accounts = menu->addMenu(tr("Accounts"));
-    const int shown = std::min<int>(emails.size(), AccountSwitcher::kMenuAccountLimit);
     for (int i = 0; i < shown; ++i)
     {
-        const QString email = emails.at(i);
+        const QString email = emails.at(shownStart + i);
         QAction* action = accounts->addAction(email);
         action->setCheckable(true);
-        action->setChecked(email == current);
+        action->setChecked(QString::compare(email, current, Qt::CaseInsensitive) == 0);
         connect(action,
                 &QAction::triggered,
                 this,

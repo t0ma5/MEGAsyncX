@@ -21,6 +21,51 @@ bool emailsEqual(const QString& left, const QString& right)
     return QString::compare(left, right, Qt::CaseInsensitive) == 0;
 }
 
+int storedIndex(const QStringList& stored, const QString& email)
+{
+    for (int i = 0; i < stored.size(); ++i)
+    {
+        if (emailsEqual(stored.at(i), email))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Place a new email beside the closest account from the same file that is already stored.
+// An earlier file neighbor wins. Otherwise the account goes just before the next stored
+// neighbor. With no neighbor, it goes at the end.
+void insertByFileNeighbors(QStringList& stored, const QStringList& fileOrder, const QString& email)
+{
+    const int fileIndex = storedIndex(fileOrder, email);
+    if (fileIndex < 0)
+    {
+        stored.append(email);
+        return;
+    }
+
+    for (int i = fileIndex - 1; i >= 0; --i)
+    {
+        const int at = storedIndex(stored, fileOrder.at(i));
+        if (at >= 0)
+        {
+            stored.insert(at + 1, email);
+            return;
+        }
+    }
+    for (int i = fileIndex + 1; i < fileOrder.size(); ++i)
+    {
+        const int at = storedIndex(stored, fileOrder.at(i));
+        if (at >= 0)
+        {
+            stored.insert(at, email);
+            return;
+        }
+    }
+    stored.append(email);
+}
+
 void styleAccountDialog(QMessageBox& box)
 {
     auto* tokens = TokenParserWidgetManager::instance().get();
@@ -231,6 +276,15 @@ void AccountSwitcher::importFromFile(QWidget* parent)
     int missingPassword = 0;
     int overflow = 0;
     QStringList details;
+    QStringList fileOrder;
+
+    struct ImportedAccount
+    {
+        int lineNumber;
+        QString email;
+        QString password;
+    };
+    QList<ImportedAccount> accepted;
 
     auto addDetail = [&details](const QString& line)
     {
@@ -275,35 +329,41 @@ void AccountSwitcher::importFromFile(QWidget* parent)
             continue;
         }
 
-        bool isKnown = false;
-        for (const QString& storedEmail: known)
+        accepted.append({lineNumber, email, password});
+        if (storedIndex(fileOrder, email) < 0)
         {
-            if (emailsEqual(storedEmail, email))
-            {
-                isKnown = true;
-                break;
-            }
+            fileOrder.append(email);
         }
+    }
 
+    for (const ImportedAccount& account: accepted)
+    {
+        const bool isKnown = storedIndex(known, account.email) >= 0;
         if (!isKnown && known.size() >= kMaxAccounts)
         {
             ++overflow;
-            addDetail(tr("Line %1: %2 skipped, account limit reached.").arg(lineNumber).arg(email));
+            addDetail(tr("Line %1: %2 skipped, account limit reached.")
+                          .arg(account.lineNumber)
+                          .arg(account.email));
             continue;
         }
 
-        preferences->setAccountPassword(email, password);
+        preferences->setAccountPassword(account.email, account.password);
         if (isKnown)
         {
             ++updated;
-            addDetail(tr("%1 is already in the list. Stored password was replaced.").arg(email));
+            addDetail(tr("%1 is already in the list. Stored password was replaced.").arg(account.email));
         }
         else
         {
-            preferences->rememberSavedAccount(email);
-            known.append(email);
+            insertByFileNeighbors(known, fileOrder, account.email);
             ++added;
         }
+    }
+
+    if (added > 0)
+    {
+        preferences->setSavedAccountEmails(known);
     }
 
     QString report = tr("Added %1. Password updated for %2 already in the list.")
