@@ -1,6 +1,7 @@
 #ifndef PREFERENCES_H
 #define PREFERENCES_H
 
+#include "AccountListLogic.h"
 #include "EncryptedSettings.h"
 #include "EphemeralCredentials.h"
 #include "megaapi.h"
@@ -27,6 +28,8 @@ signals:
     void stateChanged();
     void updated(int lastVersion);
     void valueChanged(QString key);
+    // The saved account list changed: accounts added, imported, or removed.
+    void savedAccountsChanged();
 
 private:
     Preferences();
@@ -386,7 +389,20 @@ public:
     void rememberSavedAccount(const QString& email);
     void setSavedAccountEmails(const QStringList& emails);
     void forgetSavedAccount(const QString& email);
+    void forgetSavedAccounts(const QStringList& emails);
     void forgetAllSavedSessions();
+    // Last known storage, read from each account's own group. Accounts that have never reported
+    // storage are left out.
+    AccountStorageMap savedAccountStorage(const QStringList& emails);
+    bool confirmAccountSwitch();
+    void setConfirmAccountSwitch(bool value);
+    bool openFilesAfterSwitch();
+    void setOpenFilesAfterSwitch(bool value);
+    bool sortAccountsByFreeSpace();
+    void setSortAccountsByFreeSpace(bool value);
+    // Set when the switcher restarts the app into another account, cleared once it has loaded.
+    bool isSwitcherLogin();
+    bool takeSwitcherLogin();
     bool hasSessionForAccount(const QString& email);
     QString sessionForAccount(const QString& email);
     void setAccountPassword(const QString& email, const QString& password);
@@ -697,6 +713,11 @@ protected:
     static const QString pendingGuestLoginKey;
     static const QString pendingLoginEmailKey;
     static const QString accountPasswordKey;
+    static const QString confirmAccountSwitchKey;
+    static const QString openFilesAfterSwitchKey;
+    static const QString switcherLoginKey;
+    static const QString sortAccountsByFreeSpaceKey;
+    static const QString storageSnapshotTimeKey;
     static const QString currentAccountStatusKey;
     static const QString needsFetchNodesKey;
     static const QString syncsGroupByTagKey;
@@ -900,6 +921,8 @@ private:
     void runAtSettingsRoot(const std::function<void()>& fn);
     QStringList readSavedAccounts();
     void writeSavedAccounts(const QStringList& accounts);
+    bool rootFlag(const QString& key, bool defaultValue);
+    void setRootFlag(const QString& key, bool value);
 
 private slots:
     void setFullName(const QString& newFirstName, const QString& newLastName);

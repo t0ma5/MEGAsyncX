@@ -1,11 +1,14 @@
 #include "AccountSwitcher.h"
 
+#include "AccountListLogic.h"
 #include "LoginController.h"
 #include "MegaApplication.h"
 #include "Preferences.h"
 #include "TokenParserWidgetManager.h"
+#include "Utilities.h"
 #include "megaapi.h"
 
+#include <QDateTime>
 #include <QFileDialog>
 #include <QFile>
 #include <QMessageBox>
@@ -19,51 +22,6 @@ namespace
 bool emailsEqual(const QString& left, const QString& right)
 {
     return QString::compare(left, right, Qt::CaseInsensitive) == 0;
-}
-
-int storedIndex(const QStringList& stored, const QString& email)
-{
-    for (int i = 0; i < stored.size(); ++i)
-    {
-        if (emailsEqual(stored.at(i), email))
-        {
-            return i;
-        }
-    }
-    return -1;
-}
-
-// Place a new email beside the closest account from the same file that is already stored.
-// An earlier file neighbor wins. Otherwise the account goes just before the next stored
-// neighbor. With no neighbor, it goes at the end.
-void insertByFileNeighbors(QStringList& stored, const QStringList& fileOrder, const QString& email)
-{
-    const int fileIndex = storedIndex(fileOrder, email);
-    if (fileIndex < 0)
-    {
-        stored.append(email);
-        return;
-    }
-
-    for (int i = fileIndex - 1; i >= 0; --i)
-    {
-        const int at = storedIndex(stored, fileOrder.at(i));
-        if (at >= 0)
-        {
-            stored.insert(at + 1, email);
-            return;
-        }
-    }
-    for (int i = fileIndex + 1; i < fileOrder.size(); ++i)
-    {
-        const int at = storedIndex(stored, fileOrder.at(i));
-        if (at >= 0)
-        {
-            stored.insert(at, email);
-            return;
-        }
-    }
-    stored.append(email);
 }
 
 void styleAccountDialog(QMessageBox& box)
@@ -169,13 +127,16 @@ void AccountSwitcher::switchTo(MegaApplication* app, const QString& email)
         return;
     }
 
-    const QString prompt =
-        current.isEmpty() ?
-            tr("Switch to %1?").arg(email) :
-            tr("Switch to %1? %2 will stop syncing until you switch back.").arg(email, current);
-    if (!confirmAction(prompt))
+    if (preferences->confirmAccountSwitch())
     {
-        return;
+        const QString prompt =
+            current.isEmpty() ?
+                tr("Switch to %1?").arg(email) :
+                tr("Switch to %1? %2 will stop syncing until you switch back.").arg(email, current);
+        if (!confirmAction(prompt))
+        {
+            return;
+        }
     }
 
     persistCurrentSession(app);
@@ -203,7 +164,8 @@ void AccountSwitcher::addAccount(MegaApplication* app)
     }
 
     const QString current = preferences->email();
-    if (!confirmAction(
+    if (preferences->confirmAccountSwitch() &&
+        !confirmAction(
             tr("Sign in to another account? Sync for %1 will pause. You can switch back later.")
                 .arg(current)))
     {
@@ -231,6 +193,82 @@ void AccountSwitcher::forget(MegaApplication* app, const QString& email)
     }
 
     preferences->forgetSavedAccount(email);
+    refreshTray();
+}
+
+int AccountSwitcher::forgetMany(MegaApplication* app, const QStringList& emails)
+{
+    Q_UNUSED(app);
+    auto preferences = Preferences::instance();
+    const QString current = preferences->logged() ? preferences->email() : QString();
+    QStringList doomed;
+    for (const QString& email: emails)
+    {
+        if (!email.isEmpty() && !emailsEqual(email, current))
+        {
+            doomed.append(email);
+        }
+    }
+    if (doomed.isEmpty())
+    {
+        return 0;
+    }
+
+    preferences->forgetSavedAccounts(doomed);
+    refreshTray();
+    return doomed.size();
+}
+
+QString AccountSwitcher::accountLabel(const QString& email, const AccountStorageMap& storage)
+{
+    const auto found = storage.constFind(email);
+    if (found == storage.constEnd())
+    {
+        return tr("%1 (? GB)").arg(email);
+    }
+
+    const QString sizes = tr("%1/%2").arg(Utilities::getSizeString(found->used),
+                                          Utilities::getSizeString(found->total));
+    const QString age =
+        AccountListLogic::snapshotAge(found->updatedSecs, QDateTime::currentSecsSinceEpoch());
+    if (age.isEmpty())
+    {
+        return tr("%1 (%2)").arg(email, sizes);
+    }
+    return tr("%1 (%2, %3)").arg(email, sizes, age);
+}
+
+void AccountSwitcher::switchToNextWithFreeSpace(MegaApplication* app)
+{
+    auto preferences = Preferences::instance();
+    const QStringList emails = preferences->savedAccountEmails();
+    const QString current = preferences->logged() ? preferences->email() : QString();
+    const QString next = AccountListLogic::nextWithFreeSpace(emails,
+                                                             current,
+                                                             preferences->savedAccountStorage(emails),
+                                                             kMinimumFreeForNext);
+    if (next.isEmpty())
+    {
+        showAccountsNotice(tr("No other account has at least %1 free in its last known storage. "
+                              "Accounts showing (? GB) have not been opened yet.")
+                               .arg(Utilities::getSizeString(kMinimumFreeForNext)),
+                           false);
+        return;
+    }
+    switchTo(app, next);
+}
+
+void AccountSwitcher::refreshTray()
+{
+    // Deferred: the request may come from an action inside the menu being rebuilt.
+    QTimer::singleShot(0,
+                       MegaSyncApp,
+                       []()
+                       {
+                           MegaSyncApp->createAppMenus();
+                           MegaSyncApp->updateTrayIcon();
+                           emit Preferences::instance()->savedAccountsChanged();
+                       });
 }
 
 QString AccountSwitcher::trayTooltipHeader()
@@ -330,7 +368,7 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         }
 
         accepted.append({lineNumber, email, password});
-        if (storedIndex(fileOrder, email) < 0)
+        if (AccountListLogic::indexOf(fileOrder, email) < 0)
         {
             fileOrder.append(email);
         }
@@ -338,7 +376,7 @@ void AccountSwitcher::importFromFile(QWidget* parent)
 
     for (const ImportedAccount& account: accepted)
     {
-        const bool isKnown = storedIndex(known, account.email) >= 0;
+        const bool isKnown = AccountListLogic::indexOf(known, account.email) >= 0;
         if (!isKnown && known.size() >= kMaxAccounts)
         {
             ++overflow;
@@ -356,7 +394,7 @@ void AccountSwitcher::importFromFile(QWidget* parent)
         }
         else
         {
-            insertByFileNeighbors(known, fileOrder, account.email);
+            AccountListLogic::insertByFileNeighbors(known, fileOrder, account.email);
             ++added;
         }
     }
@@ -392,6 +430,10 @@ void AccountSwitcher::importFromFile(QWidget* parent)
     }
     const bool problem = syntaxErrors > 0 || missingPassword > 0 || overflow > 0;
     showAccountsNotice(report, problem);
+    if (added > 0)
+    {
+        refreshTray();
+    }
 }
 
 void AccountSwitcher::exportToFile(QWidget* parent)

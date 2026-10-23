@@ -57,6 +57,17 @@ jobs:
           cache: true
           archives: qtbase qtdeclarative qtquickcontrols qtquickcontrols2 qtsvg qttools qtgraphicaleffects qtimageformats qtwinextras qttranslations
 
+      - name: Build and run account list tests
+        run: |
+          $env:PATH = (Join-Path $env:QT_ROOT_DIR 'bin') + ';' + $env:PATH
+          cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -S "${{ github.workspace }}/tests/AccountListLogic" -B "${{ github.workspace }}/build-tests"
+          if ($LASTEXITCODE -ne 0) { throw "Configuring tests failed" }
+          cmake --build "${{ github.workspace }}/build-tests" --config Release
+          if ($LASTEXITCODE -ne 0) { throw "Building tests failed" }
+          ctest --test-dir "${{ github.workspace }}/build-tests" -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw "Account list tests failed" }
+
       - name: Clone vcpkg at manifest baseline
         run: |
           git clone https://github.com/microsoft/vcpkg.git "${{ env.VCPKG_ROOT }}"

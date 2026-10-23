@@ -20,8 +20,9 @@ the tray menu or Settings → Account. Only one account is ever logged in at a t
 the current session, pauses its syncs, and restarts the app against the target account. Running two
 simultaneous sessions would put the account at risk under MEGA's terms, so the fork does not do it.
 
-The switcher asks for confirmation before every switch and before adding an account, refuses
-duplicate emails, and shows the state in the tray tooltip:
+Switching happens straight away. Settings → Account has **Ask before switching accounts** if you
+want a confirmation before every switch and before adding an account. The switcher refuses
+duplicate emails and shows the state in the tray tooltip:
 
 ```
 MEGAsyncX 6.6.2
@@ -31,8 +32,35 @@ Up to date
 
 The third line is the sync state, not an update check. The tray submenu shows up to ten accounts
 from the saved list, with the active account in the middle of that slice. A side that runs out of
-accounts gives the spare slots to the other side. **All accounts…** opens the full list.
+accounts gives the spare slots to the other side. **All accounts…** opens the full list. The
+active account is ticked and bold. The menu rebuilds as soon as you add, import, or remove accounts.
 Settings → Account has a filter box for finding one email among many.
+
+Each account shows its last known storage use, for example `alice@example.com (15.5 GB/20 GB)`.
+The value is whatever the account last reported while it was active, so you can see at a glance
+which accounts still have room. Once a value is an hour old it also says how old, for example
+`(15.5 GB/20 GB, 3 d ago)`. An account that has never been active shows `(? GB)`.
+
+**Next account with free space** in the tray submenu switches to the next account in the list
+whose last snapshot has at least 1 GB free, wrapping round at the end. **Copy active email** puts
+the active address on the clipboard.
+
+After a switch, the app opens the **Files** window once the account has loaded, so you can start
+uploading and see the space left. Turn this off with **Open Files after switching accounts** in
+Settings → Account. Accounts reached through the switcher also skip the sync and backup setup
+dialog. You can still set up syncs from Settings. If the login fails or you cancel it, neither
+happens on the next manual login.
+
+**Settings → Account.** The heading shows how many accounts are saved, for example
+`Accounts: 42 of 500`. **Most free space first** sorts the list by the last known free space, with
+`(? GB)` accounts at the end. Double-click an account to switch to it, or right-click for
+**Switch**, **Copy email**, and **Remove**. **Switch** is only available with exactly one inactive
+account selected. The list refreshes by itself when accounts are added, imported, or removed from
+the tray.
+
+**Removing accounts.** In Settings → Account, Ctrl+click or Shift+click selects several accounts
+for **Remove**, or press Delete. **Remove all except active** clears the rest of the list. Both ask once before
+deleting the stored sessions and passwords. The active account is never removed this way.
 
 **Import and export.** Settings → Account has **Import from File** and **Export**, and the tray
 submenu has **Import from file** next to **Add account…**. The file format is one account per line:
@@ -112,7 +140,8 @@ Windows x64 only, with Qt 5.15.2 MSVC 2019 64-bit, MSVC v143, and vcpkg. Full lo
 from the upstream Windows notes are still in [README.win.md](README.win.md).
 
 There is also a GitHub Actions workflow at `.github/workflows/windows.yml` that produces an
-unsigned `MEGAsyncX-windows-x64` artifact. The first run takes around two and a half hours because
+unsigned `MEGAsyncX-windows-x64` artifact. Before the main build it compiles and runs the account
+list unit tests in [tests/AccountListLogic](tests/AccountListLogic), which need only Qt. The first run takes around two and a half hours because
 vcpkg builds every dependency from source; later runs reuse the cache.
 
 Because the binary is unsigned, SmartScreen will warn on first launch.

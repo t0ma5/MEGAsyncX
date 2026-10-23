@@ -257,6 +257,11 @@ const QString Preferences::savedAccountsKey         = QString::fromLatin1("saved
 const QString Preferences::pendingGuestLoginKey     = QString::fromLatin1("pendingGuestLogin");
 const QString Preferences::pendingLoginEmailKey     = QString::fromLatin1("pendingLoginEmail");
 const QString Preferences::accountPasswordKey       = QString::fromLatin1("importedPassword");
+const QString Preferences::confirmAccountSwitchKey  = QString::fromLatin1("confirmAccountSwitch");
+const QString Preferences::openFilesAfterSwitchKey  = QString::fromLatin1("openFilesAfterSwitch");
+const QString Preferences::switcherLoginKey         = QString::fromLatin1("switcherLogin");
+const QString Preferences::sortAccountsByFreeSpaceKey = QString::fromLatin1("sortAccountsByFreeSpace");
+const QString Preferences::storageSnapshotTimeKey   = QString::fromLatin1("storageSnapshotTime");
 const QString Preferences::currentAccountStatusKey  = QString::fromLatin1("currentAccountStatus");
 const QString Preferences::needsFetchNodesKey       = QString::fromLatin1("needsFetchNodes");
 const QString Preferences::emailKey                 = QString::fromLatin1("email");
@@ -809,6 +814,7 @@ void Preferences::setTotalStorage(long long value)
 {
     assert(logged());
     setValueConcurrently(totalStorageKey, value);
+    setValueConcurrently(storageSnapshotTimeKey, QDateTime::currentSecsSinceEpoch());
 }
 
 long long Preferences::usedStorage()
@@ -822,6 +828,7 @@ void Preferences::setUsedStorage(long long value)
     assert(logged());
     value = std::max(value, static_cast<long long>(0));
     setValueConcurrently(usedStorageKey, value);
+    setValueConcurrently(storageSnapshotTimeKey, QDateTime::currentSecsSinceEpoch());
 }
 
 long long Preferences::availableStorage()
@@ -3347,28 +3354,36 @@ void Preferences::setSavedAccountEmails(const QStringList& emails)
 
 void Preferences::forgetSavedAccount(const QString& email)
 {
-    if (email.isEmpty())
-    {
-        return;
-    }
+    forgetSavedAccounts(QStringList{email});
+}
+
+void Preferences::forgetSavedAccounts(const QStringList& emails)
+{
     QMutexLocker locker(&mutex);
     runAtSettingsRoot([&]() {
         QStringList stored = readSavedAccounts();
-        for (int i = stored.size() - 1; i >= 0; --i)
+        for (const QString& email: emails)
         {
-            if (QString::compare(stored.at(i), email, Qt::CaseInsensitive) == 0)
+            if (email.isEmpty())
             {
-                stored.removeAt(i);
+                continue;
+            }
+            for (int i = stored.size() - 1; i >= 0; --i)
+            {
+                if (QString::compare(stored.at(i), email, Qt::CaseInsensitive) == 0)
+                {
+                    stored.removeAt(i);
+                }
+            }
+            if (mSettings->containsGroup(email))
+            {
+                mSettings->beginGroup(email);
+                mSettings->remove(sessionKey);
+                mSettings->remove(accountPasswordKey);
+                mSettings->endGroup();
             }
         }
         writeSavedAccounts(stored);
-        if (mSettings->containsGroup(email))
-        {
-            mSettings->beginGroup(email);
-            mSettings->remove(sessionKey);
-            mSettings->remove(accountPasswordKey);
-            mSettings->endGroup();
-        }
         mSettings->sync();
     });
 }
@@ -3462,6 +3477,92 @@ QString Preferences::accountPassword(const QString& email)
     return password;
 }
 
+AccountStorageMap Preferences::savedAccountStorage(const QStringList& emails)
+{
+    AccountStorageMap storage;
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        for (const QString& email: emails)
+        {
+            mSettings->beginGroup(email);
+            AccountStorage account;
+            account.total = mSettings->value(totalStorageKey).toLongLong();
+            account.used = mSettings->value(usedStorageKey).toLongLong();
+            account.updatedSecs = mSettings->value(storageSnapshotTimeKey).toLongLong();
+            mSettings->endGroup();
+            if (account.total > 0)
+            {
+                storage.insert(email, account);
+            }
+        }
+    });
+    return storage;
+}
+
+bool Preferences::rootFlag(const QString& key, bool defaultValue)
+{
+    QMutexLocker locker(&mutex);
+    bool value = defaultValue;
+    runAtSettingsRoot([&]() {
+        value = mSettings->value(key, defaultValue).toBool();
+    });
+    return value;
+}
+
+void Preferences::setRootFlag(const QString& key, bool value)
+{
+    QMutexLocker locker(&mutex);
+    runAtSettingsRoot([&]() {
+        mSettings->setValue(key, value);
+        mSettings->sync();
+    });
+}
+
+bool Preferences::confirmAccountSwitch()
+{
+    return rootFlag(confirmAccountSwitchKey, false);
+}
+
+void Preferences::setConfirmAccountSwitch(bool value)
+{
+    setRootFlag(confirmAccountSwitchKey, value);
+}
+
+bool Preferences::openFilesAfterSwitch()
+{
+    return rootFlag(openFilesAfterSwitchKey, true);
+}
+
+void Preferences::setOpenFilesAfterSwitch(bool value)
+{
+    setRootFlag(openFilesAfterSwitchKey, value);
+}
+
+bool Preferences::sortAccountsByFreeSpace()
+{
+    return rootFlag(sortAccountsByFreeSpaceKey, false);
+}
+
+void Preferences::setSortAccountsByFreeSpace(bool value)
+{
+    setRootFlag(sortAccountsByFreeSpaceKey, value);
+}
+
+bool Preferences::isSwitcherLogin()
+{
+    return rootFlag(switcherLoginKey, false);
+}
+
+bool Preferences::takeSwitcherLogin()
+{
+    const bool value = isSwitcherLogin();
+    if (value)
+    {
+        setRootFlag(switcherLoginKey, false);
+    }
+    return value;
+}
+
 QString Preferences::takePendingLoginEmail()
 {
     QMutexLocker locker(&mutex);
@@ -3503,6 +3604,7 @@ void Preferences::prepareSwitchToAccount(const QString& email)
             mSettings->setValue(pendingGuestLoginKey, false);
             mSettings->setValue(pendingLoginEmailKey, QString());
         }
+        mSettings->setValue(switcherLoginKey, true);
         mSettings->sync();
     });
 }
@@ -3512,6 +3614,7 @@ void Preferences::prepareAddAccount()
     QMutexLocker locker(&mutex);
     runAtSettingsRoot([&]() {
         mSettings->setValue(pendingGuestLoginKey, true);
+        mSettings->setValue(switcherLoginKey, true);
         mSettings->sync();
     });
 }

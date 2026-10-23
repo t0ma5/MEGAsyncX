@@ -1,5 +1,6 @@
 
 set(DESKTOP_APP_CONTROL_HEADERS
+    ${CMAKE_CURRENT_LIST_DIR}/AccountListLogic.h
     ${CMAKE_CURRENT_LIST_DIR}/AccountSwitcher.h
     ${CMAKE_CURRENT_LIST_DIR}/AccountStatusController.h
     ${CMAKE_CURRENT_LIST_DIR}/AppState.h
@@ -61,6 +62,7 @@ set(DESKTOP_APP_CONTROL_HEADERS
 )
 
 set(DESKTOP_APP_CONTROL_SOURCES
+    ${CMAKE_CURRENT_LIST_DIR}/AccountListLogic.cpp
     ${CMAKE_CURRENT_LIST_DIR}/AccountSwitcher.cpp
     ${CMAKE_CURRENT_LIST_DIR}/AccountStatusController.cpp
     ${CMAKE_CURRENT_LIST_DIR}/AppState.cpp

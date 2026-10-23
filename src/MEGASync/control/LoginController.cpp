@@ -127,6 +127,13 @@ void LoginController::setState(State state)
         state == State::FETCH_NODES_FINISHED)
     {
         mOnboardingShown = false;
+        // Accounts reached through the switcher skip the sync/backup setup dialog: the switcher
+        // is used for uploads, and the setup can still be done from Settings.
+        if (!mForceOnboarding && mPreferences->isSwitcherLogin())
+        {
+            mPreferences->setOneTimeActionUserDone(Preferences::ONE_TIME_ACTION_ONBOARDING_SHOWN,
+                                                   true);
+        }
         // Should the onboarding be shown (without taking "force" into account)?
         const bool showOnboarding = isOnboardingFunnelPopulation();
 
@@ -208,6 +215,13 @@ void LoginController::setState(State state)
 
         mState = state;
         emit stateChanged();
+
+        // A failed, cancelled, or dropped login ends the switch. A later manual login must not
+        // skip the setup dialog or open Files.
+        if (state == LOGGED_OUT)
+        {
+            mPreferences->takeSwitcherLogin();
+        }
 
         if (state == State::FETCH_NODES_FINISHED)
         {

@@ -1561,6 +1561,13 @@ if (!infoDialog)
 
     createAppMenus();
 
+    // After an account switch, go straight to the cloud drive: it is where uploads start and it
+    // shows the space left.
+    if (preferences->takeSwitcherLogin() && preferences->openFilesAfterSwitch())
+    {
+        QTimer::singleShot(0, this, &MegaApplication::goToFiles);
+    }
+
     mThreadPool->push([=](){
     setMaxUploadSpeed(preferences->uploadLimitKB());
     setMaxDownloadSpeed(preferences->downloadLimitKB());
@@ -4680,49 +4687,44 @@ void MegaApplication::populateAccountsMenu(QMenu* menu)
     const QStringList emails = savedPreferences->savedAccountEmails();
     const int total = emails.size();
 
-    int activeIndex = -1;
-    if (!current.isEmpty())
-    {
-        for (int i = 0; i < emails.size(); ++i)
-        {
-            if (QString::compare(emails.at(i), current, Qt::CaseInsensitive) == 0)
-            {
-                activeIndex = i;
-                break;
-            }
-        }
-    }
+    const auto window = AccountListLogic::menuWindow(total,
+                                                     AccountListLogic::indexOf(emails, current),
+                                                     AccountSwitcher::kMenuAccountLimit);
+    const int shownStart = window.start;
+    const int shown = window.count;
 
-    // Window of at most 10, active account in the middle. Each side starts at up to 5.
-    // A side that hits the start or end gives its unused slots to the other side.
-    int shownStart = 0;
-    int shown = std::min<int>(total, AccountSwitcher::kMenuAccountLimit);
-    if (activeIndex >= 0 && total > AccountSwitcher::kMenuAccountLimit)
+    // clearMenu() has already detached the old submenu's action, and may have deleted it, so only
+    // the submenu itself is left to drop.
+    const QLatin1String accountsMenuName("MEGAsyncXAccountsMenu");
+    for (QMenu* stale: menu->findChildren<QMenu*>(accountsMenuName, Qt::FindDirectChildrenOnly))
     {
-        const int side = AccountSwitcher::kMenuAccountLimit / 2;
-        int before = std::min(side, activeIndex);
-        int after = std::min(AccountSwitcher::kMenuAccountLimit - 1 - before,
-                             total - activeIndex - 1);
-        if (before + after + 1 < AccountSwitcher::kMenuAccountLimit)
-        {
-            before = std::min(activeIndex, AccountSwitcher::kMenuAccountLimit - 1 - after);
-        }
-        shownStart = activeIndex - before;
-        shown = before + 1 + after;
+        stale->deleteLater();
     }
 
     QMenu* accounts = menu->addMenu(tr("Accounts"));
-    for (int i = 0; i < shown; ++i)
+    accounts->setObjectName(accountsMenuName);
+    const QStringList shownEmails = emails.mid(shownStart, shown);
+    const auto storage = savedPreferences->savedAccountStorage(shownEmails);
+    for (const QString& email: shownEmails)
     {
-        const QString email = emails.at(shownStart + i);
-        QAction* action = accounts->addAction(email);
+        const bool active = QString::compare(email, current, Qt::CaseInsensitive) == 0;
+        QAction* action = accounts->addAction(AccountSwitcher::accountLabel(email, storage));
         action->setCheckable(true);
-        action->setChecked(QString::compare(email, current, Qt::CaseInsensitive) == 0);
+        action->setChecked(active);
+        if (active)
+        {
+            QFont font = action->font();
+            font.setBold(true);
+            action->setFont(font);
+        }
         connect(action,
                 &QAction::triggered,
                 this,
-                [this, email]()
+                [this, action, email, active]()
                 {
+                    // Qt flips the tick on every click. Keep it on the active account only,
+                    // whatever happens with the switch.
+                    action->setChecked(active);
                     switchAccount(email);
                 });
     }
@@ -4739,6 +4741,24 @@ void MegaApplication::populateAccountsMenu(QMenu* menu)
     }
 
     accounts->addSeparator();
+    if (total > 1)
+    {
+        accounts->addAction(tr("Next account with free space"),
+                            this,
+                            [this]()
+                            {
+                                AccountSwitcher::switchToNextWithFreeSpace(this);
+                            });
+    }
+    if (!current.isEmpty())
+    {
+        accounts->addAction(tr("Copy active email"),
+                            this,
+                            [current]()
+                            {
+                                QApplication::clipboard()->setText(current);
+                            });
+    }
     if (total < AccountSwitcher::kMaxAccounts)
     {
         accounts->addAction(tr("Add account..."), this, &MegaApplication::addSavedAccount);
