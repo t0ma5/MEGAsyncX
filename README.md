@@ -3,8 +3,20 @@
 ![MEGAsyncX](MEGAsyncX-windows-x64.png)
 
 MEGAsyncX is a personal, non-commercial fork of the MEGA Desktop Application for **Windows x64**.
-It keeps the sync engine untouched and changes what the app does around it: several accounts in one
-install, no upgrade nagging, no telemetry, no auto-updater, and no Explorer integration.
+It keeps the sync engine untouched and changes what the app does around it:
+
+- up to 500 MEGA accounts, one signed in at a time, switched from the tray in one click
+- last known storage next to every account, for example `(15.5 GB/20 GB)`
+- jump to the next account with free space, or sort the list by free space
+- the Files window opens after a switch, with no sync setup dialog in the way
+- import and export accounts from a text file
+- remove many accounts at once
+- no upgrade nagging or ads
+- no telemetry
+- no auto-updater
+- no Explorer integration
+
+Details for each are below.
 
 It installs alongside official MEGAsync rather than replacing it. The binary is `MEGAsyncX.exe`, the
 settings live in `%LOCALAPPDATA%\Mega Limited\MEGAsyncX`, and the shell pipe is renamed, so neither
@@ -59,8 +71,9 @@ account selected. The list refreshes by itself when accounts are added, imported
 the tray.
 
 **Removing accounts.** In Settings → Account, Ctrl+click or Shift+click selects several accounts
-for **Remove**, or press Delete. **Remove all except active** clears the rest of the list. Both ask once before
-deleting the stored sessions and passwords. The active account is never removed this way.
+for **Remove**, or press Delete. **Remove all except active** clears the rest of the list. Both ask
+once before deleting the stored sessions and passwords. The active account is never removed this
+way.
 
 **Import and export.** Settings → Account has **Import from File** and **Export**, and the tray
 submenu has **Import from file** next to **Add account…**. The file format is one account per line:
